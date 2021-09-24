@@ -88,7 +88,7 @@ def challenge_entry(sample_path):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model_path = r'.\RCNN_best_model.pt'
     model = RCNN()
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path,map_location='cuda:0'))
     model.eval()
     model.to(device)
     [b,a] = butter(3,[0.5/100,40/100],'bandpass')

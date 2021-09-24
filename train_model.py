@@ -13,7 +13,7 @@ from Regularization import Regularization
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 data_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
-batch_size = 256
+batch_size = 1024
 epochs = 80
 learning_rate = 0.0001
 patience = 10
