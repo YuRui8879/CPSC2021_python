@@ -39,15 +39,13 @@ class RCNN(nn.Module):
             nn.Linear(256, 128),
             nn.ReLU(True),
             nn.Dropout(0.1),
-            nn.Linear(128, 16),
-            nn.ReLU(True),
-            nn.Linear(16,2),
+            nn.Linear(128, 2),
             nn.Softmax(-1)
         )
 
     def forward(self,x):
         batch_size = x.size(0)
-        x = x.view(-1,1,2000)
+        x = x.view(-1,1,1000)
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
@@ -61,9 +59,22 @@ class RCNN(nn.Module):
         x = self.linear_unit(x)
         return x
 
+class RNN(nn.Module):
+
+    def __init__(self):
+        super(RNN,self).__init__()
+        self.gru1 = nn.GRU(1, 128,batch_first=True,bidirectional=True)
+        self.gru1 = nn.GRU(256, 256,batch_first=True,bidirectional=True)
+        self.relu = nn.ReLU(True)
+        self.dropout = nn.Dropout(0.2)
+        self.linear1 = nn.Linear(512,128)
+        self.linear2 = nn.Linear(128,2)
+
+    def forward(self,x):
+        return x
 
 if __name__ == '__main__':
     model = RCNN()
-    x = torch.rand(128,2000)
+    x = torch.rand(128,1000)
     y = model(x)
     print(y.size())

@@ -3,7 +3,7 @@ import torch.nn as nn
 from read_code import *
 from DataAdapter import DataAdapter
 import torch.utils.data as Data
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR,MultiStepLR
 from model import RCNN
 import time
 from batch import cal_batch
@@ -13,9 +13,9 @@ from Regularization import Regularization
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 data_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
-batch_size = 1024
+batch_size = 512
 epochs = 80
-learning_rate = 0.0001
+learning_rate = 0.001
 patience = 10
 
 res = get_signal(data_path)
@@ -48,7 +48,8 @@ model.to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 early_stopping = EarlyStopping(patience, verbose=False)
-clr = CosineAnnealingLR(optimizer,T_max = 32)
+# clr = CosineAnnealingLR(optimizer,T_max = 32)
+clr = MultiStepLR(optimizer,[20,50],gamma=0.1)
 
 reg_loss = Regularization(model, 0.001)
 best_loss = 100

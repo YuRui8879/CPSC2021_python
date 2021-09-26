@@ -21,7 +21,7 @@ Written by:  Xingyao Wang, Chengyu Liu
 
 Save answers to '.json' files, the format is as {‘predict_endpoints’: [[s0, e0], [s1, e1], …, [sm-1, em-2]]}.
 """
-def move_windows(X,fs,win_n = 10):
+def move_windows(X,fs,win_n = 5):
     step = fs
     windows_length = win_n * fs
     res_X = []
@@ -70,10 +70,15 @@ def find_start_end(X,fs,sig_len):
     tmp = []
     for i in range(len(X)-1):
         if X[i] == 0 and X[i+1] == 1:
-            tmp.append((i+5)*fs)
+            if (i+5)*fs >= sig_len:
+                break
+            else:
+                tmp.append((i+5)*fs)
         elif X[i] == 1 and X[i+1] == 0:
-            if (i+5)*fs > sig_len:
+            if (i+5)*fs >= sig_len:
                 tmp.append(sig_len-1)
+                res.append(tmp)
+                break
             else:
                 tmp.append((i+5)*fs)
             if len(tmp) == 2:
@@ -86,7 +91,7 @@ def challenge_entry(sample_path):
     This is a baseline method.
     """
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model_path = r'.\RCNN_best_model.pt'
+    model_path = r'.\model\RCNN_best_model.pt'
     model = RCNN()
     model.load_state_dict(torch.load(model_path,map_location='cuda:0'))
     model.eval()
@@ -97,7 +102,7 @@ def challenge_entry(sample_path):
     sig = filtfilt(b,a,sig[:, 1])
     end_points = []
 
-    batch_size = 256
+    batch_size = 512
     res_X,res_std = move_windows(sig,fs)
     test_set = DataAdapter(res_X, np.zeros(len(res_X)))
     test_loader = Data.DataLoader(test_set,batch_size = batch_size,shuffle = False,num_workers = 0)
@@ -138,7 +143,7 @@ def challenge_entry(sample_path):
         end_points = find_start_end(res,fs,len(sig))
     
     pred_dcit = {'predict_endpoints': end_points}
-    
+
     return pred_dcit
 
 

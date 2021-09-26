@@ -113,13 +113,13 @@ def gen_X_Y(res,n_samp = 10,n_rate = 1,af_rate = 1):
         if class_true == 0:
             square_wave = np.zeros(sig_len)
             nEN = sig_len//int(n_rate * n_samp)
-            tmp_X,tmp_Y = data_enhance(sig,square_wave,10*fs,nEN)
+            tmp_X,tmp_Y = data_enhance(sig,square_wave,5*fs,nEN)
             res_X.extend(tmp_X)
             res_Y.extend(tmp_Y)
         elif class_true == 1:
             square_wave = np.ones(sig_len)
             nEN = sig_len//int(af_rate * n_samp)
-            tmp_X,tmp_Y = data_enhance(sig,square_wave,10*fs,nEN)
+            tmp_X,tmp_Y = data_enhance(sig,square_wave,5*fs,nEN)
             res_X.extend(tmp_X)
             res_Y.extend(tmp_Y)
         else:
@@ -129,7 +129,7 @@ def gen_X_Y(res,n_samp = 10,n_rate = 1,af_rate = 1):
             square_wave = np.zeros(sig_len)
             for j in range(len(af_start)):
                 square_wave[int(beat_loc[int(af_start[j])]):int(beat_loc[int(af_end[j])])] = 1
-            tmp_X,tmp_Y = data_enhance(sig,square_wave,10*fs,fs)
+            tmp_X,tmp_Y = data_enhance(sig,square_wave,5*fs,fs)
             AF_index = np.where(np.array(tmp_Y) == 1,True,False)
             Normal_index = np.where(np.array(tmp_Y) == 0,True,False)
             AF_X = np.array(tmp_X)[AF_index,:]
