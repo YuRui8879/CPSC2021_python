@@ -14,6 +14,7 @@ from read_code import load_data
 from scipy.signal import butter,filtfilt
 from score_2021 import RefInfo
 import matplotlib.pyplot as plt
+from distutils import dir_util
 
 """
 Written by:  Xingyao Wang, Chengyu Liu
@@ -72,17 +73,17 @@ def find_start_end(X,fs,sig_len):
     tmp = []
     for i in range(len(X)-1):
         if X[i] == 0 and X[i+1] == 1:
-            if (i+5)*fs >= sig_len:
+            if (i+2)*fs >= sig_len:
                 break
             else:
-                tmp.append((i+5)*fs)
+                tmp.append((i+2)*fs)
         elif X[i] == 1 and X[i+1] == 0:
-            if (i+5)*fs >= sig_len:
+            if (i+2)*fs >= sig_len:
                 tmp.append(sig_len-1)
                 res.append(tmp)
                 break
             else:
-                tmp.append((i+5)*fs)
+                tmp.append((i+2)*fs)
             if len(tmp) == 2:
                 res.append(tmp)
             tmp = []
@@ -92,7 +93,7 @@ def challenge_entry(sample_path):
     """
     This is a baseline method.
     """
-    debug = 0
+    debug = 1
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = []
     for fold in range(5):
@@ -157,6 +158,9 @@ def challenge_entry(sample_path):
     if debug:
         pic_path = r'.\pic'
         if not os.path.exists(pic_path):
+            os.makedirs(pic_path)
+        else:
+            dir_util.remove_tree(pic_path)
             os.makedirs(pic_path)
         ref = RefInfo(sample_path)
         beat_loc = ref.beat_loc

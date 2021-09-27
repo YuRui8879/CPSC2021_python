@@ -27,7 +27,9 @@ with open(os.path.join(RESULT_PATH, 'score.txt'), 'w') as score_file:
     print('AF Endpoints Detection Performance: %0.4f' %score_avg, file=score_file)
 
     score_file.close()
-
-file_path = r'.\pic\confusion_matrix.npy'
-confusion_matrix = np.load(file_path)
-print(confusion_matrix)
+try:
+    file_path = r'.\pic\confusion_matrix.npy'
+    confusion_matrix = np.load(file_path)
+    print(confusion_matrix)
+except:
+    print('no_confusion_matrix.npy')
