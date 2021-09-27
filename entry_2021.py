@@ -14,7 +14,6 @@ from read_code import load_data
 from scipy.signal import butter,filtfilt
 from score_2021 import RefInfo
 import matplotlib.pyplot as plt
-from distutils import dir_util
 
 """
 Written by:  Xingyao Wang, Chengyu Liu
@@ -93,7 +92,7 @@ def challenge_entry(sample_path):
     """
     This is a baseline method.
     """
-    debug = 1
+    debug = 0
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model = []
     for fold in range(5):
@@ -158,9 +157,6 @@ def challenge_entry(sample_path):
     if debug:
         pic_path = r'.\pic'
         if not os.path.exists(pic_path):
-            os.makedirs(pic_path)
-        else:
-            dir_util.remove_tree(pic_path)
             os.makedirs(pic_path)
         ref = RefInfo(sample_path)
         beat_loc = ref.beat_loc

@@ -3,7 +3,11 @@ from entry_2021 import challenge_entry
 from utils import save_dict
 from score_2021 import score
 import numpy as np
+from distutils import dir_util
 
+pic_path = r'.\pic'
+if os.path.exists(pic_path):
+    dir_util.remove_tree(pic_path)
 
 DATA_PATH = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
 RESULT_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\out'
@@ -27,6 +31,7 @@ with open(os.path.join(RESULT_PATH, 'score.txt'), 'w') as score_file:
     print('AF Endpoints Detection Performance: %0.4f' %score_avg, file=score_file)
 
     score_file.close()
+
 try:
     file_path = r'.\pic\confusion_matrix.npy'
     confusion_matrix = np.load(file_path)
