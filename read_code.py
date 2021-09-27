@@ -4,6 +4,8 @@ from score_2021 import RefInfo
 from scipy.signal import filtfilt,butter
 import wfdb
 import random
+from model import RCNN
+import torch
 
 def load_data(sample_path):
     sig, fields = wfdb.rdsamp(sample_path)
@@ -55,7 +57,7 @@ def select_data(res,record_path):
 
 def gen_sample(res,seed = 0,train_rate = 0.7,valid_rate = 0.1):
     random.seed(seed)
-    index = list(range(len(res)))
+    index = list(range(105))
     random.shuffle(index)
     train_size = int(len(index) * train_rate)
     valid_size = int(len(index) * valid_rate)
@@ -78,6 +80,29 @@ def gen_sample(res,seed = 0,train_rate = 0.7,valid_rate = 0.1):
     print('测试集样本：',len(test_index))
     return train_samp,valid_samp,test_samp
 
+def gen_ensemble_samp(res,n_part = 5,fold = 0,seed = 0, test_rate = 0.2):
+    random.seed(seed)
+    index = list(range(105))
+    random.shuffle(index)
+    train_size = int(len(index) * (1 - test_rate))
+    test_size = train_size // n_part
+    train_index = index[:train_size]
+    test_index = index[train_size:]
+    valid_index = train_index[fold * test_size:(fold + 1) * test_size]
+    train_index = list(set(train_index) - set(valid_index))
+    train_samp = []
+    valid_samp = []
+    test_samp = []
+    for samp in res:
+        name = int(samp['name'].split('_')[1])
+        if name in train_index:
+            train_samp.append(samp)
+        elif name in valid_index:
+            valid_samp.append(samp)
+        else:
+            test_samp.append(samp)
+    return train_samp,valid_samp,test_samp
+
 def data_enhance(sig,label,win_len,step):
     sig_len = len(sig)
     res_sig = []
@@ -98,7 +123,10 @@ def data_enhance(sig,label,win_len,step):
         
     return res_sig,res_label
 
-def gen_X_Y(res,n_samp = 10,n_rate = 1,af_rate = 1):
+def gen_rnn_data(res):
+    pass
+
+def gen_cnn_X_Y(res,n_samp = 10,n_rate = 1,af_rate = 1):
     res_X = []
     res_Y = []
     [b,a] = butter(3,[0.5/100,40/100],'bandpass')
@@ -148,6 +176,7 @@ def gen_X_Y(res,n_samp = 10,n_rate = 1,af_rate = 1):
                 res_Y.append(N_Y[n])
 
     return res_X,res_Y
+
 
 if __name__ == '__main__':
     data_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'

@@ -12,6 +12,8 @@ from model import RCNN
 import torch
 from read_code import load_data
 from scipy.signal import butter,filtfilt
+from score_2021 import RefInfo
+import matplotlib.pyplot as plt
 
 """
 Written by:  Xingyao Wang, Chengyu Liu
@@ -90,12 +92,15 @@ def challenge_entry(sample_path):
     """
     This is a baseline method.
     """
+    debug = 0
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model_path = r'.\model\RCNN_best_model.pt'
-    model = RCNN()
-    model.load_state_dict(torch.load(model_path,map_location='cuda:0'))
-    model.eval()
-    model.to(device)
+    model = []
+    for fold in range(5):
+        model_path = r'.\model\RCNN_best_model'+ str(fold) + '.pt'
+        model.append(RCNN())
+        model[fold].load_state_dict(torch.load(model_path,map_location='cuda:0'))
+        model[fold].eval()
+        model[fold].to(device)
     [b,a] = butter(3,[0.5/100,40/100],'bandpass')
 
     sig, _, fs = load_data(sample_path)
@@ -107,17 +112,21 @@ def challenge_entry(sample_path):
     test_set = DataAdapter(res_X, np.zeros(len(res_X)))
     test_loader = Data.DataLoader(test_set,batch_size = batch_size,shuffle = False,num_workers = 0)
 
-    res = np.zeros(len(res_X))
+    res = np.zeros((len(model),len(res_X)))
     idx = 0
     for i,data in enumerate(test_loader,0):
         inputs,labels = data[0].to(device),data[1].to(device)
-        outputs = model(inputs)
-        _,pred = outputs.max(1)
+        for fold in range(len(model)):
+            outputs,_ = model[fold](inputs)
+            _,pred = outputs.max(1)
 
-        with torch.no_grad():
-            p = pred.cpu().numpy()
-            res[idx:idx + batch_size] = p
-            idx += batch_size
+            with torch.no_grad():
+                p = pred.cpu().numpy()
+                res[fold,idx:idx + batch_size] = p.reshape(1,len(p))
+
+        idx += batch_size
+    
+    res = np.squeeze(np.where(np.sum(res,axis=0)>len(model)/2,1,0))
 
     cross_th =  cal_cross_th(res)
     if cross_th > 30:
@@ -134,14 +143,51 @@ def challenge_entry(sample_path):
     res = plus_inhibition(res)
     if np.sum(np.where(res == 0,1,0)) > len(res) * 0.9:
         end_points = []
+        predict_label = 0
     elif np.sum(np.where(res == 1,1,0)) > len(res) * 0.9:
         tmp = []
         tmp.append(0)
         tmp.append(len(sig)-1)
         end_points.append(tmp)
+        predict_label = 1
     else:
         end_points = find_start_end(res,fs,len(sig))
+        predict_label = 2
     
+    if debug:
+        pic_path = r'.\pic'
+        if not os.path.exists(pic_path):
+            os.makedirs(pic_path)
+        ref = RefInfo(sample_path)
+        beat_loc = ref.beat_loc
+        af_start = ref.af_starts
+        af_end = ref.af_ends
+        class_true = int(ref.class_true)
+        sig_len = ref.len_sig
+        if class_true == 2:
+            real_wave = np.zeros(sig_len)
+            for i in range(len(af_start)):
+                real_wave[int(beat_loc[int(af_start[i])]):int(beat_loc[int(af_end[i])])] = 1
+            predict_wave = np.zeros(sig_len)
+            for (starts,ends) in end_points:
+                predict_wave[starts:ends] = 1
+            plt.plot(real_wave,label = 'real')
+            plt.plot(predict_wave,label = 'predict')
+            plt.legend()
+            name = sample_path.split('\\')[-1]
+            plt.title(name)
+            plt.savefig(os.path.join(pic_path,name) + '.png')
+            plt.clf()
+        file_path = os.path.join(pic_path,'confusion_matrix.npy')
+        if os.path.exists(file_path):
+            confusion_matrix = np.load(file_path)
+            confusion_matrix[class_true,predict_label] += 1
+            np.save(file_path,confusion_matrix)
+        else:
+            confusion_matrix = np.zeros((3,3))
+            confusion_matrix[class_true,predict_label] += 1
+            np.save(file_path,confusion_matrix)
+        
     pred_dcit = {'predict_endpoints': end_points}
 
     return pred_dcit

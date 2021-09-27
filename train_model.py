@@ -6,7 +6,7 @@ import torch.utils.data as Data
 from torch.optim.lr_scheduler import CosineAnnealingLR,MultiStepLR
 from model import RCNN
 import time
-from batch import cal_batch
+from batch import cal_cnn_batch
 import torch.optim as optim
 from EarlyStopping import EarlyStopping
 from Regularization import Regularization
@@ -58,10 +58,10 @@ for epoch in range(1,epochs + 1):
     time_all=0
     start_time = time.time()
     # 训练模型
-    train_res = cal_batch(train_loader, model, criterion, device, optimizer, reg_loss, True)
+    train_res = cal_cnn_batch(train_loader, model, criterion, device, optimizer, reg_loss, True)
     # 验证集测试模型
     clr.step()
-    valid_res = cal_batch(valid_loader, model, criterion, device, optimizer, reg_loss, False)
+    valid_res = cal_cnn_batch(valid_loader, model, criterion, device, optimizer, reg_loss, False)
     time_all = time.time()-start_time
     # 打印训练及测试结果
     print('- Epoch: %d - Train_loss: %.5f - Train_mean_acc: %.5f - Train_F1: %.5f - Val_loss: %.5f - Val_mean_acc: %5f - Val_F1: %.5f - T_Time: %.3f' \
@@ -81,7 +81,7 @@ for epoch in range(1,epochs + 1):
         # 结束模型训练
         break
 
-print('Training Finished')
+print('RCNN Training Finished')
 
 result = cal_batch(test_loader, model, criterion, device, optimizer, reg_loss, False)
 print('confusion_matrix:',result['confusion_matrix'])
