@@ -7,6 +7,12 @@ import random
 from model import RCNN
 import torch
 
+def norm(x):
+    min_ = np.min(x)
+    max_ = np.max(x)
+    x = (x - min_)/(max_ - min_)
+    return x
+
 def load_data(sample_path):
     sig, fields = wfdb.rdsamp(sample_path)
     length = len(sig)
@@ -132,7 +138,7 @@ def gen_cnn_X_Y(res,n_samp = 10,n_rate = 1,af_rate = 1):
     [b,a] = butter(3,[0.5/100,40/100],'bandpass')
     for samp in res:
         class_true = int(samp['class_true'])
-        sig = filtfilt(b,a,samp['sig'])
+        sig = norm(filtfilt(b,a,samp['sig']))
         fs = samp['fs']
         sig_len = len(sig)
         if sig_len < 2*n_samp*fs:

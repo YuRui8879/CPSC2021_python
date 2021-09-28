@@ -14,6 +14,9 @@ from read_code import load_data
 from scipy.signal import butter,filtfilt
 from score_2021 import RefInfo
 import matplotlib.pyplot as plt
+from read_code import norm
+from scipy import interpolate
+from utils import p_t_qrs
 
 """
 Written by:  Xingyao Wang, Chengyu Liu
@@ -52,7 +55,7 @@ def cal_cross_th(X):
     return cross_th
 
 def plus_inhibition(X):
-    patience = 5
+    patience = 10
     flag = 0
     count = 0
     for i in range(len(X)-1):
@@ -65,7 +68,107 @@ def plus_inhibition(X):
             if count < patience:
                 X[i-count:i] = 0
             flag = 0
+    flag = 0
+    count = 0
+    for i in range(len(X)-1):
+        if X[i] == 1 and X[i+1] == 0:
+            count = 0
+            flag = 1
+        if flag == 1:
+            count += 1
+        if X[i] == 0 and X[i+1] == 1:
+            if count < patience:
+                X[i-count:i] = 1
+            flag = 0
+
     return X
+
+def forward_backward_search(X,end_points,qrs_pos):
+    segment = []
+    res_end_points = []
+    for i in range(len(qrs_pos)-1):
+        segment.append(X[int(qrs_pos[i]):int(qrs_pos[i+1])])
+    for (starts,ends) in end_points:
+        tmp = []
+        loc = find_segment_loc(starts, qrs_pos)
+        backward_point = backward_revise_point(segment,loc)
+        if backward_point == -1:
+            forward_point = forward_revise_point(segment,loc)
+            if forward_point == -1:
+                continue
+            else:
+                tmp.append(qrs_pos[forward_point])
+        elif backward_point == 0:
+            tmp.append(starts)
+        else:
+            tmp.append(qrs_pos[backward_point])
+        loc = find_segment_loc(ends, qrs_pos)
+        backward_point = backward_revise_point(segment,loc)
+        if backward_point == -1:
+            forward_point = forward_revise_point(segment,loc)
+            if forward_point == -1:
+                continue
+            else:
+                tmp.append(qrs_pos[forward_point])
+        elif backward_point == 0:
+            tmp.append(ends)
+        else:
+            tmp.append(qrs_pos[backward_point])
+        res_end_points.append(tmp)
+    return res_end_points
+        
+
+def backward_revise_point(segment,loc):
+    th_corr = 0.6
+    count = 0
+    corr = 0
+    while corr < th_corr:
+        if len(segment[loc-count]) < len(segment[loc-count-1]):
+            corr = cal_corr(segment[loc-count],segment[loc-count-1])
+        elif len(segment[loc-count]) > len(segment[loc-count-1]):
+            corr = cal_corr(segment[loc-count-1],segment[loc-count])
+        else:
+            corr = np.corrcoef(segment[loc-count-1],segment[loc-count])[0,1]
+
+        count += 1
+        if count > 10:
+            return -1
+    return loc - count
+
+def forward_revise_point(segment,loc):
+    th_corr = 0.6
+    count = 0
+    corr = 0
+    while corr < th_corr:
+        if len(segment[loc+count]) < len(segment[loc+count+1]):
+            corr = cal_corr(segment[loc+count],segment[loc+count+1])
+        elif len(segment[loc+count]) > len(segment[loc+count+1]):
+            corr = cal_corr(segment[loc+count+1],segment[loc+count])
+        else:
+            corr = np.corrcoef(segment[loc+count+1],segment[loc+count])[0,1]
+
+        count += 1
+        if count > 10:
+            return 0
+    return loc + count
+
+def cal_corr(seg,lseg):
+    xline = np.linspace(0,len(seg)-1,len(seg))
+    new_xline = np.linspace(0,len(seg)-1,len(lseg))
+    f = interpolate.interp1d(xline, seg, kind = 'cubic')
+    y_new = f(new_xline) # 插值之后的seg
+    if len(y_new) > len(lseg):
+        y_new = y_new[:len(lseg)]
+    elif len(y_new) < len(lseg):
+        lseg = lseg[:len(y_new)]
+    corr = np.corrcoef(y_new,lseg)[0,1]
+    return corr
+
+def find_segment_loc(l,qrs_pos):
+    for i in range(len(qrs_pos)):
+        if l < qrs_pos[i]:
+            return i - 1
+    return 0
 
 def find_start_end(X,fs,sig_len):
     res = []
@@ -104,7 +207,8 @@ def challenge_entry(sample_path):
     [b,a] = butter(3,[0.5/100,40/100],'bandpass')
 
     sig, _, fs = load_data(sample_path)
-    sig = filtfilt(b,a,sig[:, 1])
+    qrs_pos = p_t_qrs(sig[:,1],fs)
+    sig = norm(filtfilt(b,a,sig[:, 1]))
     end_points = []
 
     batch_size = 512
@@ -127,24 +231,12 @@ def challenge_entry(sample_path):
         idx += batch_size
     
     res = np.squeeze(np.where(np.sum(res,axis=0)>len(model)/2,1,0))
-
-    cross_th =  cal_cross_th(res)
-    if cross_th > 30:
-        n_count = np.sum(np.where(res == 0,1,0))
-        af_count = len(res) - n_count
-        if n_count > af_count:
-            end_points = []
-        else:
-            tmp = []
-            tmp.append(0)
-            tmp.append(len(sig)-1)
-            end_points.append(tmp)
     
     res = plus_inhibition(res)
-    if np.sum(np.where(res == 0,1,0)) > len(res) * 0.9:
+    if np.sum(np.where(res == 0,1,0)) > len(res) * 0.95:
         end_points = []
         predict_label = 0
-    elif np.sum(np.where(res == 1,1,0)) > len(res) * 0.9:
+    elif np.sum(np.where(res == 1,1,0)) > len(res) * 0.85:
         tmp = []
         tmp.append(0)
         tmp.append(len(sig)-1)
@@ -154,6 +246,22 @@ def challenge_entry(sample_path):
         end_points = find_start_end(res,fs,len(sig))
         predict_label = 2
     
+    cross_th =  cal_cross_th(res)
+    if cross_th > 30:
+        n_count = np.sum(np.where(res == 0,1,0))
+        af_count = len(res) - n_count
+        if n_count > af_count:
+            end_points = []
+            predict_label = 0
+        else:
+            tmp = []
+            tmp.append(0)
+            tmp.append(len(sig)-1)
+            end_points.append(tmp)
+            predict_label = 1
+
+    # end_points = forward_backward_search(sig,end_points,qrs_pos)
+
     if debug:
         pic_path = r'.\pic'
         if not os.path.exists(pic_path):
@@ -211,3 +319,10 @@ if __name__ == '__main__':
 
         save_dict(os.path.join(RESULT_PATH, sample+'.json'), pred_dict)
 
+    # sample_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data\data_32_11'
+    # sig, _, fs = load_data(sample_path)
+    # qrs_pos = p_t_qrs(sig[:,1],fs)
+    # [b,a] = butter(3,[0.5/100,40/100],'bandpass')
+    # sig = norm(filtfilt(b,a,sig[:, 1]))
+    # res = forward_backward_search(sig,[[18980,26000]],qrs_pos)
+    # print(res)
