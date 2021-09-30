@@ -8,7 +8,7 @@ import wfdb
 from utils import qrs_detect, comp_cosEn, save_dict
 from DataAdapter import DataAdapter
 import torch.utils.data as Data
-from model import RCNN
+from model import RCNN,RNN
 import torch
 from read_code import load_data
 from scipy.signal import butter,filtfilt
@@ -86,82 +86,62 @@ def plus_inhibition(X):
 def forward_backward_search(X,end_points,qrs_pos):
     segment = []
     res_end_points = []
+    th = 10
     for i in range(len(qrs_pos)-1):
         segment.append(X[int(qrs_pos[i]):int(qrs_pos[i+1])])
     for (starts,ends) in end_points:
         tmp = []
         loc = find_segment_loc(starts, qrs_pos)
-        backward_point = backward_revise_point(segment,loc)
-        if backward_point == -1:
-            forward_point = forward_revise_point(segment,loc)
-            if forward_point == -1:
-                continue
-            else:
-                tmp.append(qrs_pos[forward_point])
-        elif backward_point == 0:
-            tmp.append(starts)
-        else:
-            tmp.append(qrs_pos[backward_point])
+        corr_list = []
+        for i in range(-th,th + 1):
+            st = min(max(0,loc + i - 1),len(segment)-1)
+            en = max(0,min(len(segment)-1,loc + i))
+            corr_list.append(cal_corr(segment[en],segment[st]))
+        idx = check_index(corr_list)
+        if idx == -1:
+            continue
+        tmp.append(qrs_pos[loc + idx])
+
         loc = find_segment_loc(ends, qrs_pos)
-        backward_point = backward_revise_point(segment,loc)
-        if backward_point == -1:
-            forward_point = forward_revise_point(segment,loc)
-            if forward_point == -1:
-                continue
-            else:
-                tmp.append(qrs_pos[forward_point])
-        elif backward_point == 0:
-            tmp.append(ends)
-        else:
-            tmp.append(qrs_pos[backward_point])
-        res_end_points.append(tmp)
+        corr_list = []
+        for i in range(-th,th + 1):
+            st = min(max(0,loc + i - 1),len(segment)-1)
+            en = max(0,min(len(segment)-1,loc + i))
+            corr_list.append(cal_corr(segment[en],segment[st]))
+        idx = check_index(corr_list)
+        if idx != -1:
+            tmp.append(qrs_pos[loc + idx])
+            res_end_points.append(tmp)
+
     return res_end_points
-        
 
-def backward_revise_point(segment,loc):
-    th_corr = 0.6
-    count = 0
-    corr = 0
-    while corr < th_corr:
-        if len(segment[loc-count]) < len(segment[loc-count-1]):
-            corr = cal_corr(segment[loc-count],segment[loc-count-1])
-        elif len(segment[loc-count]) > len(segment[loc-count-1]):
-            corr = cal_corr(segment[loc-count-1],segment[loc-count])
-        else:
-            corr = np.corrcoef(segment[loc-count-1],segment[loc-count])[0,1]
-
-        count += 1
-        if count > 10:
-            return -1
-    return loc - count
-
-def forward_revise_point(segment,loc):
-    th_corr = 0.6
-    count = 0
-    corr = 0
-    while corr < th_corr:
-        if len(segment[loc+count]) < len(segment[loc+count+1]):
-            corr = cal_corr(segment[loc+count],segment[loc+count+1])
-        elif len(segment[loc+count]) > len(segment[loc+count+1]):
-            corr = cal_corr(segment[loc+count+1],segment[loc+count])
-        else:
-            corr = np.corrcoef(segment[loc+count+1],segment[loc+count])[0,1]
-
-        count += 1
-        if count > 10:
-            return 0
-    return loc + count
+def check_index(corr_index):
+    corr_th = 0.5
+    middle = len(corr_index)//2
+    if corr_index[middle] < corr_th:
+        return 0
+    for i in range(1,len(corr_index)//2 + 1):
+        if corr_index[middle - i] < corr_th:
+            return -i
+        if corr_index[middle + i] < corr_th:
+            return i
+    return -1
 
 def cal_corr(seg,lseg):
-    xline = np.linspace(0,len(seg)-1,len(seg))
-    new_xline = np.linspace(0,len(seg)-1,len(lseg))
-    f = interpolate.interp1d(xline, seg, kind = 'cubic')
-    y_new = f(new_xline) # 插值之后的seg
-    if len(y_new) > len(lseg):
-        y_new = y_new[:len(lseg)]
-    elif len(y_new) < len(lseg):
-        lseg = lseg[:len(y_new)]
-    corr = np.corrcoef(y_new,lseg)[0,1]
+    if len(seg) != len(lseg):
+        if len(seg) > len(lseg):
+            lseg = seg # 保证lseg的长度大于seg的长度
+        xline = np.linspace(0,len(seg)-1,len(seg))
+        new_xline = np.linspace(0,len(seg)-1,len(lseg))
+        f = interpolate.interp1d(xline, seg, kind = 'cubic')
+        y_new = f(new_xline) # 插值之后的seg
+        if len(y_new) > len(lseg):
+            y_new = y_new[:len(lseg)]
+        elif len(y_new) < len(lseg):
+            lseg = lseg[:len(y_new)]
+        corr = np.corrcoef(y_new,lseg)[0,1]
+    else:
+        corr = np.corrcoef(seg,lseg)[0,1]
     return corr
 
 def find_segment_loc(l,qrs_pos):
@@ -197,40 +177,50 @@ def challenge_entry(sample_path):
     """
     debug = 0
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = []
-    for fold in range(5):
-        model_path = r'.\model\RCNN_best_model'+ str(fold) + '.pt'
-        model.append(RCNN())
-        model[fold].load_state_dict(torch.load(model_path,map_location='cuda:0'))
-        model[fold].eval()
-        model[fold].to(device)
-    [b,a] = butter(3,[0.5/100,40/100],'bandpass')
 
+    cnn_path = r'.\model\RCNN_best_model.pt'
+    cnn = RCNN()
+    cnn.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
+    cnn.eval()
+    cnn.to(device)
+
+    rnn_path = r'.\model\RNN_best_model.pt'
+    rnn = RNN()
+    rnn.load_state_dict(torch.load(rnn_path,map_location='cuda:0'))
+    rnn.eval()
+    rnn.to(device)
+
+    [b,a] = butter(3,[0.5/100,40/100],'bandpass')
     sig, _, fs = load_data(sample_path)
     qrs_pos = p_t_qrs(sig[:,1],fs)
     sig = norm(filtfilt(b,a,sig[:, 1]))
     end_points = []
 
-    batch_size = 512
+    batch_size = 64
     res_X,res_std = move_windows(sig,fs)
     test_set = DataAdapter(res_X, np.zeros(len(res_X)))
     test_loader = Data.DataLoader(test_set,batch_size = batch_size,shuffle = False,num_workers = 0)
 
-    res = np.zeros((len(model),len(res_X)))
+    res = np.zeros(len(res_X))
     idx = 0
     for i,data in enumerate(test_loader,0):
         inputs,labels = data[0].to(device),data[1].to(device)
-        for fold in range(len(model)):
-            outputs,_ = model[fold](inputs)
-            _,pred = outputs.max(1)
+        cnn_outputs,cnn_feature = cnn(inputs)
+        if len(labels) < 64:
+            _,pred = cnn_outputs.max(1)
+        else:
+            cnn_feature = cnn_feature.view(1,-1,256)
+            rnn_outputs = rnn(cnn_feature)
+            rnn_outputs = rnn_outputs.view(-1,2)
+            _,pred = rnn_outputs.max(1)
 
-            with torch.no_grad():
-                p = pred.cpu().numpy()
-                res[fold,idx:idx + batch_size] = p.reshape(1,len(p))
+
+        with torch.no_grad():
+            res[idx:idx + batch_size] = pred.cpu().numpy()
 
         idx += batch_size
     
-    res = np.squeeze(np.where(np.sum(res,axis=0)>len(model)/2,1,0))
+    res = np.squeeze(res)
     
     res = plus_inhibition(res)
     if np.sum(np.where(res == 0,1,0)) > len(res) * 0.95:
@@ -302,27 +292,27 @@ def challenge_entry(sample_path):
 
 
 if __name__ == '__main__':
-    DATA_PATH = sys.argv[1]
-    RESULT_PATH = sys.argv[2]
-    # DATA_PATH = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
-    # RESULT_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\out'
-    # RECORDS_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\test_record'
-    if not os.path.exists(RESULT_PATH):
-        os.makedirs(RESULT_PATH)
+    # DATA_PATH = sys.argv[1]
+    # RESULT_PATH = sys.argv[2]
+    # # DATA_PATH = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
+    # # RESULT_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\out'
+    # # RECORDS_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\test_record'
+    # if not os.path.exists(RESULT_PATH):
+    #     os.makedirs(RESULT_PATH)
     
-    test_set = open(os.path.join(DATA_PATH, 'RECORDS'), 'r').read().splitlines()
-    # test_set = open(os.path.join(RECORDS_PATH, 'RECORDS'), 'r').read().splitlines()
-    for i, sample in enumerate(test_set):
-        print(sample)
-        sample_path = os.path.join(DATA_PATH, sample)
-        pred_dict = challenge_entry(sample_path)
+    # test_set = open(os.path.join(DATA_PATH, 'RECORDS'), 'r').read().splitlines()
+    # # test_set = open(os.path.join(RECORDS_PATH, 'RECORDS'), 'r').read().splitlines()
+    # for i, sample in enumerate(test_set):
+    #     print(sample)
+    #     sample_path = os.path.join(DATA_PATH, sample)
+    #     pred_dict = challenge_entry(sample_path)
 
-        save_dict(os.path.join(RESULT_PATH, sample+'.json'), pred_dict)
+    #     save_dict(os.path.join(RESULT_PATH, sample+'.json'), pred_dict)
 
-    # sample_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data\data_32_11'
-    # sig, _, fs = load_data(sample_path)
-    # qrs_pos = p_t_qrs(sig[:,1],fs)
-    # [b,a] = butter(3,[0.5/100,40/100],'bandpass')
-    # sig = norm(filtfilt(b,a,sig[:, 1]))
-    # res = forward_backward_search(sig,[[18980,26000]],qrs_pos)
-    # print(res)
+    sample_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data\data_32_12'
+    sig, _, fs = load_data(sample_path)
+    qrs_pos = p_t_qrs(sig[:,1],fs)
+    [b,a] = butter(3,[0.5/100,40/100],'bandpass')
+    sig = norm(filtfilt(b,a,sig[:, 1]))
+    res = forward_backward_search(sig,[[18980,26000]],qrs_pos)
+    print(res)

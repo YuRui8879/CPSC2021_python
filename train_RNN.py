@@ -6,23 +6,26 @@ import torch.utils.data as Data
 from torch.optim.lr_scheduler import CosineAnnealingLR,MultiStepLR
 from model import RNN
 import time
-from batch import cal_batch
+from batch import cal_rnn_batch
 import torch.optim as optim
 from EarlyStopping import EarlyStopping
 from Regularization import Regularization
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 data_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
-batch_size = 512
+batch_size = 64
 epochs = 80
 learning_rate = 0.001
 patience = 10
 
 res = get_signal(data_path)
 train_samp,valid_samp,test_samp = gen_sample(res)
-train_X,train_Y = gen_X_Y(train_samp,af_rate = 1.5)
-valid_X,valid_Y = gen_X_Y(valid_samp)
-test_X,test_Y = gen_X_Y(test_samp)
+train_X,train_Y = gen_rnn_data(train_samp)
+train_X = get_cnn_featrue(train_X)
+valid_X,valid_Y = gen_rnn_data(valid_samp)
+valid_X = get_cnn_featrue(valid_X)
+test_X,test_Y = gen_rnn_data(test_samp)
+test_X = get_cnn_featrue(test_X)
 
 train_set = DataAdapter(train_X, train_Y)
 valid_set = DataAdapter(valid_X, valid_Y)
@@ -32,25 +35,25 @@ train_loader = Data.DataLoader(train_set,batch_size = batch_size,shuffle = True,
 valid_loader = Data.DataLoader(valid_set,batch_size = batch_size,shuffle = False,num_workers = 0)
 test_loader = Data.DataLoader(test_set,batch_size = batch_size,shuffle = False,num_workers = 0)
 
-rnn = RNN()
-rnn.to(device)
+model = RNN()
+model.to(device)
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(rnn.parameters(), lr=learning_rate)
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 early_stopping = EarlyStopping(patience, verbose=False)
 # clr = CosineAnnealingLR(optimizer,T_max = 32)
 clr = MultiStepLR(optimizer,[20,50],gamma=0.1)
 
-reg_loss = Regularization(rnn, 0.001)
+reg_loss = Regularization(model, 0.001)
 best_loss = 100
 
 for epoch in range(1,epochs + 1):
     time_all=0
     start_time = time.time()
     # 训练模型
-    train_res = cal_batch(train_loader, rnn, criterion, device, optimizer, reg_loss, True)
+    train_res = cal_rnn_batch(train_loader, model, criterion, device, optimizer, reg_loss, True)
     # 验证集测试模型
     clr.step()
-    valid_res = cal_batch(valid_loader, rnn, criterion, device, optimizer, reg_loss, False)
+    valid_res = cal_rnn_batch(valid_loader, model, criterion, device, optimizer, reg_loss, False)
     time_all = time.time()-start_time
     # 打印训练及测试结果
     print('- Epoch: %d - Train_loss: %.5f - Train_mean_acc: %.5f - Train_F1: %.5f - Val_loss: %.5f - Val_mean_acc: %5f - Val_F1: %.5f - T_Time: %.3f' \
@@ -61,9 +64,9 @@ for epoch in range(1,epochs + 1):
     if valid_res['loss'] < best_loss:
         best_loss = valid_res['loss']
         print('Find better model in Epoch {0}, saving model.'.format(epoch))
-        torch.save(rnn.state_dict(), r'.\model\RNN_best_model.pt')
+        torch.save(model.state_dict(), r'.\model\RNN_best_model.pt')
 
-    early_stopping(valid_res['loss'], rnn)
+    early_stopping(valid_res['loss'], model)
         # 若满足 early stopping 要求
     if early_stopping.early_stop:
         print("Early stopping")
@@ -72,6 +75,6 @@ for epoch in range(1,epochs + 1):
 
 print('RNN Training Finished')
 
-result = cal_batch(test_loader, rnn, criterion, device, optimizer, reg_loss, False)
+result = cal_rnn_batch(test_loader, model, criterion, device, optimizer, reg_loss, False)
 print('confusion_matrix:',result['confusion_matrix'])
 print('acc:',result['acc'])

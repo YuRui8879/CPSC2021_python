@@ -6,6 +6,9 @@ import wfdb
 import random
 from model import RCNN
 import torch
+import pandas as pd
+from scipy.io import loadmat
+from scipy.interpolate import interp1d
 
 def norm(x):
     min_ = np.min(x)
@@ -113,24 +116,84 @@ def data_enhance(sig,label,win_len,step):
     sig_len = len(sig)
     res_sig = []
     res_label = []
-    last_std = np.std(sig[:win_len])
     for ii in range(0,sig_len-win_len,step):
-        # if np.std(sig[ii:ii+win_len])>3*last_std:
-        #     continue
         tmp = label[ii:ii+win_len]
         if np.sum(tmp) > len(tmp)//2:
             res_label.append(1)
             res_sig.append(sig[ii:ii+win_len])
-            last_std = np.std(sig[ii:ii+win_len])
         else:
             res_label.append(0)
             res_sig.append(sig[ii:ii+win_len])
-            last_std = np.std(sig[ii:ii+win_len])
         
     return res_sig,res_label
 
-def gen_rnn_data(res):
-    pass
+def gen_rnn_data(res,time_step = 64):
+    res_X = []
+    res_Y = []
+    [b,a] = butter(3,[0.5/100,40/100],'bandpass')
+    n_count = 0
+    af_count = 0
+    for samp in res:
+        class_true = int(samp['class_true'])
+        sig = norm(filtfilt(b,a,samp['sig']))
+        fs = samp['fs']
+        sig_len = len(sig)
+        step = (time_step + 5)*fs
+        if sig_len < step:
+            continue
+        if class_true == 0 or class_true == 1:
+            if class_true == 0:
+                label = np.zeros(step)
+            else:
+                label = np.ones(step)
+            cursor = 0
+            while cursor + step < sig_len:
+                tmp = sig[cursor:cursor + step]
+                X,Y = data_enhance(tmp,label,5*fs,fs)
+                res_X.append(X)
+                res_Y.append(Y)
+                if np.sum(Y) == 0:
+                    n_count += time_step
+                else:
+                    af_count += time_step
+                if cursor % step > 4:
+                    break
+                cursor += step
+        else:
+            af_start = samp['af_starts']
+            af_end = samp['af_ends']
+            beat_loc = samp['beat_loc']
+            label = np.zeros(sig_len)
+            for j in range(len(af_start)):
+                label[int(beat_loc[int(af_start[j])]):int(beat_loc[int(af_end[j])])] = 1
+            cursor = 0
+            while cursor + step < sig_len:
+                tmp = sig[cursor:cursor + step]
+                X,Y = data_enhance(tmp,label,5*fs,fs)
+                res_X.append(X)
+                res_Y.append(Y)
+                tmp_count = np.sum(np.where(np.array(Y) == 1,1,0))
+                n_count += (len(Y) - tmp_count)
+                af_count += tmp_count
+                cursor += step
+    print('房颤标签数量：',af_count)
+    print('正常标签数量：',n_count)
+    return res_X,res_Y
+
+def get_cnn_featrue(X):
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    model = RCNN()
+    model.load_state_dict(torch.load(r'.\model\RCNN_best_model.pt',map_location='cuda:0'))
+    model.eval()
+    model.to(device)
+    res_X = []
+    for x in X:
+        with torch.no_grad():
+            x = torch.FloatTensor(x).to(device)
+            _,y = model(x)
+            res_X.append(y.cpu().numpy())
+    return res_X
+
 
 def gen_cnn_X_Y(res,n_samp = 10,n_rate = 1,af_rate = 1):
     res_X = []
@@ -183,17 +246,100 @@ def gen_cnn_X_Y(res,n_samp = 10,n_rate = 1,af_rate = 1):
 
     return res_X,res_Y
 
+def read_pretrain_data(data_path):
+    sample = []
+    for path in os.listdir(data_path):
+        if path == 'WFDB_CPSC2018' or path == 'WFDB_CPSC2018_2' or path == 'WFDB_Ga' or path == 'WFDB_PTBXL' or path == 'WFDB_ChapmanShaoxing':
+            new_path = os.path.join(data_path,path)
+            for p in os.listdir(new_path):
+                if p.endswith('.hea'):
+                    tmp = {}
+                    data_name,fs,adc,sig_len,label,num_leads,baseline = read_physionet_header(os.path.join(new_path,p))
+                    if label == -1:
+                        continue
+                    data = loadmat(os.path.join(new_path,data_name))['val']
+                    tmp['data'] = (data[1,:] - baseline)/adc
+                    tmp['label'] = label
+                    tmp['fs'] = fs
+                    sample.append(tmp)           
+
+    return sample
+
+def read_physionet_header(file_path):
+    with open(file_path) as f:
+        context = f.readlines()
+    label = -1
+    for idx in range(len(context)):
+        line = context[idx].strip().split(' ')
+        if idx == 0:
+            num_leads = line[1]
+            fs = line[2]
+            sig_len = line[3]
+        elif idx == 1:
+            data_name = line[0]
+            adc = line[2].split('/')[0]
+            baseline = line[4]
+        elif idx == 15:
+            tag = line[-1].split(',')
+            if '164889003' in tag:
+                label = 1
+            elif '426783006' in tag:
+                label = 0
+            else:
+                label = -1
+    return data_name,float(fs),float(adc),int(sig_len),label,num_leads,baseline
+
+def gen_pretrain_X_Y(res,seed = 0):
+    random.seed(seed)
+    [b,a] = butter(3,[0.5/100,40/100],'bandpass')
+    win_len = 1000
+    res_X = []
+    res_Y = []
+    af_count = 0
+    n_count = 0
+    for samp in res:
+        fs = samp['fs']
+        data = samp['data']
+        label = samp['label']
+        if fs != 200:
+            data = resample(data,fs,200)
+        data = norm(filtfilt(b, a, data))
+        if len(data) < win_len:
+            continue
+        if label == 0:
+            rd = random.randint(0,len(data)-win_len)
+            res_X.append(data[rd:rd+win_len])
+            res_Y.append(0)
+            n_count += 1
+        else:
+            cursor = 0
+            while cursor + win_len < len(data):
+                res_X.append(data[cursor:cursor + win_len])
+                res_Y.append(1)
+                cursor += win_len
+                af_count += 1
+
+    print('af_count:',af_count)
+    print('n_count:',n_count)
+    return res_X,res_Y
+
+def resample(x,ori_fs,dis_fs):
+    f = interp1d(np.arange(len(x)),x,kind='cubic')
+    xnew = np.arange(0,len(x)-1,ori_fs/dis_fs)
+    ynew = f(xnew)
+    return ynew
+
+def load_pretrained_mdoel(model_path):
+    model = RCNN()
+    pretrained_dict = torch.load(model_path)
+    pretrained_dict.pop('linear_unit.0.weight')
+    pretrained_dict.pop('linear_unit.0.bias')
+    pretrained_dict.pop('linear_unit.3.weight')
+    pretrained_dict.pop('linear_unit.3.bias')
+    model.load_state_dict(pretrained_dict, strict=False)
+    return model
+    
 
 if __name__ == '__main__':
-    data_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
-    res = get_signal(data_path)
-    train_samp,valid_samp,test_samp = gen_sample(res)
-    train_X,train_Y = gen_X_Y(train_samp,af_rate = 1.5)
-    valid_X,valid_Y = gen_X_Y(valid_samp,n_rate = 2)
-    test_X,test_Y = gen_X_Y(test_samp,af_rate = 2)
-    print(np.sum(np.where(np.array(train_Y)==1,1,0)))
-    print(np.sum(np.where(np.array(train_Y)==0,1,0)))
-    print(np.sum(np.where(np.array(valid_Y)==1,1,0)))
-    print(np.sum(np.where(np.array(valid_Y)==0,1,0)))
-    print(np.sum(np.where(np.array(test_Y)==1,1,0)))
-    print(np.sum(np.where(np.array(test_Y)==0,1,0)))
+    model_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\pretrain_model.pt'
+    load_pretrained_mdoel(model_path)

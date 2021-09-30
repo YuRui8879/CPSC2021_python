@@ -54,8 +54,7 @@ class RCNN(nn.Module):
         x = x.permute([0,2,1])
         _,h = self.gru(x)
         h = self.relu(h.permute([1,0,2]))
-        x = torch.cat((h[:,0,:],h[:,1,:]),dim = 1)
-        x = x.view(x.size(0),-1)
+        x = h.reshape(h.size(0),-1)
         fea = x
         x = self.linear_unit(x)
         return x,fea
@@ -68,8 +67,9 @@ class RNN(nn.Module):
         self.gru2 = nn.GRU(256, 256,batch_first=True,bidirectional=True)
         self.relu = nn.ReLU(True)
         self.dropout = nn.Dropout(0.2)
-        self.linear1 = nn.Linear(512,128)
-        self.linear2 = nn.Linear(128,2)
+        self.linear1 = nn.Linear(512,256)
+        self.linear2 = nn.Linear(256,128)
+        self.linear3 = nn.Linear(128,2)
         self.softmax = nn.Softmax(-1)
 
     def forward(self,x):
@@ -77,13 +77,15 @@ class RNN(nn.Module):
         x = self.dropout(x)
         x,h = self.gru2(x)
         x = self.relu(self.linear1(x))
-        x = self.softmax(self.linear2(x))
+        x = self.relu(self.linear2(x))
+        x = self.dropout(x)
+        x = self.softmax(self.linear3(x))
         return x
 
 if __name__ == '__main__':
     # model = RCNN()
     # x = torch.rand(128,1000)
-    # y = model(x)
+    # y,fea = model(x)
     # print(y.size())
     model = RNN()
     x = torch.rand(24,30,256)

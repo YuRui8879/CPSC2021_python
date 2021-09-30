@@ -40,10 +40,9 @@ def cal_cnn_batch(train_loader,model,criterion,device,optimizer = None,reg_loss 
         'F1':cal_F1(confusion_matrix)
     }
 
-def cal_rnn_batch(train_loader,cnn,rnn,criterion,device,optimizer = None,reg_loss = None,is_train = True):
+def cal_rnn_batch(train_loader,model,criterion,device,optimizer = None,reg_loss = None,is_train = True):
 
-    cnn.eval()
-    rnn.train()
+    model.train()
     loss_list = []
     acc_list = []
     confusion_matrix = np.zeros((2,2))
@@ -51,9 +50,10 @@ def cal_rnn_batch(train_loader,cnn,rnn,criterion,device,optimizer = None,reg_los
     for i,data in enumerate(train_loader,0):
 
         inputs,labels = data[0].to(device),data[1].to(device)
-        outputs,fea = cnn(inputs)
+        outputs = model(inputs)
+        outputs = outputs.view(-1,2)
         _,pred = outputs.max(1)
-
+        labels = labels.view(-1)
         loss = criterion(outputs,labels)
 
         with torch.no_grad():

@@ -46,6 +46,7 @@ for fold in range(folds):
     test_loader = Data.DataLoader(test_set,batch_size = batch_size,shuffle = False,num_workers = 0)
 
     model = RCNN()
+    # model.load_state_dict(torch.load(r'.\model\pretrain_model.pt',map_location='cuda:0'))
     model.to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
