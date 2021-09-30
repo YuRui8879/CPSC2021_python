@@ -206,13 +206,13 @@ def challenge_entry(sample_path):
     for i,data in enumerate(test_loader,0):
         inputs,labels = data[0].to(device),data[1].to(device)
         cnn_outputs,cnn_feature = cnn(inputs)
-        if len(labels) < 64:
-            _,pred = cnn_outputs.max(1)
-        else:
-            cnn_feature = cnn_feature.view(1,-1,256)
-            rnn_outputs = rnn(cnn_feature)
-            rnn_outputs = rnn_outputs.view(-1,2)
-            _,pred = rnn_outputs.max(1)
+        # if len(labels) < 64:
+        _,pred = cnn_outputs.max(1)
+        # else:
+        #     cnn_feature = cnn_feature.view(1,-1,256)
+        #     rnn_outputs = rnn(cnn_feature)
+        #     rnn_outputs = rnn_outputs.view(-1,2)
+        #     _,pred = rnn_outputs.max(1)
 
 
         with torch.no_grad():
