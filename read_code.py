@@ -4,7 +4,7 @@ from score_2021 import RefInfo
 from scipy.signal import filtfilt,butter
 import wfdb
 import random
-from model import RCNN
+from model import CNN
 import torch
 import pandas as pd
 from scipy.io import loadmat
@@ -182,8 +182,8 @@ def gen_rnn_data(res,time_step = 64):
 
 def get_cnn_featrue(X):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = RCNN()
-    model.load_state_dict(torch.load(r'.\model\RCNN_best_model.pt',map_location='cuda:0'))
+    model = CNN()
+    model.load_state_dict(torch.load(r'.\model\CNN_best_model.pt',map_location='cuda:0'))
     model.eval()
     model.to(device)
     res_X = []
@@ -287,7 +287,7 @@ def read_physionet_header(file_path):
                 label = 0
             else:
                 label = -1
-    return data_name,float(fs),float(adc),int(sig_len),label,num_leads,baseline
+    return data_name,float(fs),float(adc),int(sig_len),label,num_leads,float(baseline)
 
 def gen_pretrain_X_Y(res,seed = 0):
     random.seed(seed)
@@ -330,7 +330,7 @@ def resample(x,ori_fs,dis_fs):
     return ynew
 
 def load_pretrained_mdoel(model_path):
-    model = RCNN()
+    model = CNN()
     pretrained_dict = torch.load(model_path)
     pretrained_dict.pop('linear_unit.0.weight')
     pretrained_dict.pop('linear_unit.0.bias')

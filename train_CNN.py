@@ -4,7 +4,7 @@ from read_code import *
 from DataAdapter import DataAdapter
 import torch.utils.data as Data
 from torch.optim.lr_scheduler import CosineAnnealingLR,MultiStepLR
-from model import RCNN
+from model import CNN
 import time
 from batch import cal_cnn_batch
 import torch.optim as optim
@@ -16,7 +16,7 @@ data_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
 pretrain_model_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\pretrain_model.pt'
 batch_size = 512
 epochs = 80
-learning_rate = 0.001
+learning_rate = 0.0001
 patience = 10
 
 res = get_signal(data_path)
@@ -73,7 +73,7 @@ for epoch in range(1,epochs + 1):
     if valid_res['loss'] < best_loss:
         best_loss = valid_res['loss']
         print('Find better model in Epoch {0}, saving model.'.format(epoch))
-        torch.save(model.state_dict(), r'.\model\RCNN_best_model.pt')
+        torch.save(model.state_dict(), r'.\model\CNN_best_model.pt')
 
     early_stopping(valid_res['loss'], model)
         # 若满足 early stopping 要求

@@ -8,7 +8,7 @@ import wfdb
 from utils import qrs_detect, comp_cosEn, save_dict
 from DataAdapter import DataAdapter
 import torch.utils.data as Data
-from model import RCNN,RNN
+from model import CNN,RNN
 import torch
 from read_code import load_data
 from scipy.signal import butter,filtfilt
@@ -175,20 +175,20 @@ def challenge_entry(sample_path):
     """
     This is a baseline method.
     """
-    debug = 0
+    debug = 1
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    cnn_path = r'.\model\RCNN_best_model.pt'
-    cnn = RCNN()
+    cnn_path = r'.\model\CNN_best_model.pt'
+    cnn = CNN()
     cnn.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
     cnn.eval()
     cnn.to(device)
 
-    rnn_path = r'.\model\RNN_best_model.pt'
-    rnn = RNN()
-    rnn.load_state_dict(torch.load(rnn_path,map_location='cuda:0'))
-    rnn.eval()
-    rnn.to(device)
+    # rnn_path = r'.\model\RNN_best_model.pt'
+    # rnn = RNN()
+    # rnn.load_state_dict(torch.load(rnn_path,map_location='cuda:0'))
+    # rnn.eval()
+    # rnn.to(device)
 
     [b,a] = butter(3,[0.5/100,40/100],'bandpass')
     sig, _, fs = load_data(sample_path)
@@ -292,27 +292,19 @@ def challenge_entry(sample_path):
 
 
 if __name__ == '__main__':
-    # DATA_PATH = sys.argv[1]
-    # RESULT_PATH = sys.argv[2]
-    # # DATA_PATH = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
-    # # RESULT_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\out'
-    # # RECORDS_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\test_record'
-    # if not os.path.exists(RESULT_PATH):
-    #     os.makedirs(RESULT_PATH)
+    DATA_PATH = sys.argv[1]
+    RESULT_PATH = sys.argv[2]
+    # DATA_PATH = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
+    # RESULT_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\out'
+    # RECORDS_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\test_record'
+    if not os.path.exists(RESULT_PATH):
+        os.makedirs(RESULT_PATH)
     
-    # test_set = open(os.path.join(DATA_PATH, 'RECORDS'), 'r').read().splitlines()
-    # # test_set = open(os.path.join(RECORDS_PATH, 'RECORDS'), 'r').read().splitlines()
-    # for i, sample in enumerate(test_set):
-    #     print(sample)
-    #     sample_path = os.path.join(DATA_PATH, sample)
-    #     pred_dict = challenge_entry(sample_path)
+    test_set = open(os.path.join(DATA_PATH, 'RECORDS'), 'r').read().splitlines()
+    # test_set = open(os.path.join(RECORDS_PATH, 'RECORDS'), 'r').read().splitlines()
+    for i, sample in enumerate(test_set):
+        print(sample)
+        sample_path = os.path.join(DATA_PATH, sample)
+        pred_dict = challenge_entry(sample_path)
 
-    #     save_dict(os.path.join(RESULT_PATH, sample+'.json'), pred_dict)
-
-    sample_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data\data_32_12'
-    sig, _, fs = load_data(sample_path)
-    qrs_pos = p_t_qrs(sig[:,1],fs)
-    [b,a] = butter(3,[0.5/100,40/100],'bandpass')
-    sig = norm(filtfilt(b,a,sig[:, 1]))
-    res = forward_backward_search(sig,[[18980,26000]],qrs_pos)
-    print(res)
+        save_dict(os.path.join(RESULT_PATH, sample+'.json'), pred_dict)

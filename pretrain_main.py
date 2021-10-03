@@ -4,7 +4,7 @@ import torch.nn as nn
 from DataAdapter import DataAdapter
 import torch.utils.data as Data
 from torch.optim.lr_scheduler import CosineAnnealingLR,MultiStepLR
-from model import RCNN
+from model import CNN
 import time
 from batch import cal_cnn_batch
 import torch.optim as optim
@@ -34,7 +34,7 @@ test_set = DataAdapter(test_X, test_Y)
 train_loader = Data.DataLoader(train_set,batch_size = batch_size,shuffle = True,num_workers = 0)
 test_loader = Data.DataLoader(test_set,batch_size = batch_size,shuffle = False,num_workers = 0)
 
-model = RCNN()
+model = CNN()
 model.to(device)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -72,4 +72,4 @@ for epoch in range(1,epochs + 1):
         # 结束模型训练
         break
 
-print('RCNN Training Finished')
+print('CNN Training Finished')
