@@ -175,7 +175,7 @@ def challenge_entry(sample_path):
     """
     This is a baseline method.
     """
-    debug = 1
+    debug = 0
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     cnn_path = r'.\model\CNN_best_model.pt'
