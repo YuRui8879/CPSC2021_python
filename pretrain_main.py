@@ -18,7 +18,7 @@ X,Y = gen_pretrain_X_Y(res)
 
 batch_size = 128
 epochs = 80
-learning_rate = 0.001
+learning_rate = 0.0001
 patience = 10
 train_rate = 0.8
 
@@ -63,7 +63,7 @@ for epoch in range(1,epochs + 1):
     if valid_res['loss'] < best_loss:
         best_loss = valid_res['loss']
         print('Find better model in Epoch {0}, saving model.'.format(epoch))
-        torch.save(model.state_dict(), r'.\model\pretrain_model.pt')
+        torch.save(model.state_dict(), r'.\model\pretrain_model2.pt')
 
     early_stopping(valid_res['loss'], model)
         # 若满足 early stopping 要求

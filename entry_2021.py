@@ -6,7 +6,7 @@ import sys
 
 import wfdb
 from utils import qrs_detect, comp_cosEn, save_dict
-from DataAdapter import DataAdapter
+from DataAdapter import DataAdapter2
 import torch.utils.data as Data
 from model import CNN,RNN
 import torch
@@ -55,7 +55,7 @@ def cal_cross_th(X):
     return cross_th
 
 def plus_inhibition(X):
-    patience = 10
+    patience = 5
     flag = 0
     count = 0
     for i in range(len(X)-1):
@@ -184,45 +184,53 @@ def challenge_entry(sample_path):
     cnn.eval()
     cnn.to(device)
 
-    # rnn_path = r'.\model\RNN_best_model.pt'
-    # rnn = RNN()
-    # rnn.load_state_dict(torch.load(rnn_path,map_location='cuda:0'))
-    # rnn.eval()
-    # rnn.to(device)
+    cnn_path = r'.\model\CNN_best_model2.pt'
+    cnn2 = CNN()
+    cnn2.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
+    cnn2.eval()
+    cnn2.to(device)
 
     [b,a] = butter(3,[0.5/100,40/100],'bandpass')
     sig, _, fs = load_data(sample_path)
     qrs_pos = p_t_qrs(sig[:,1],fs)
-    sig = norm(filtfilt(b,a,sig[:, 1]))
+    sig1 = norm(filtfilt(b,a,sig[:, 0]))
+    sig2 = norm(filtfilt(b,a,sig[:, 1]))
     end_points = []
 
     batch_size = 64
-    res_X,res_std = move_windows(sig,fs)
-    test_set = DataAdapter(res_X, np.zeros(len(res_X)))
+    res_X,_ = move_windows(sig1,fs)
+    res_X2,_ = move_windows(sig2,fs)
+    test_set = DataAdapter2(res_X, res_X2)
     test_loader = Data.DataLoader(test_set,batch_size = batch_size,shuffle = False,num_workers = 0)
 
     res = np.zeros(len(res_X))
     idx = 0
     for i,data in enumerate(test_loader,0):
-        inputs,labels = data[0].to(device),data[1].to(device)
-        cnn_outputs,cnn_feature = cnn(inputs)
-        # if len(labels) < 64:
-        _,pred = cnn_outputs.max(1)
-        # else:
-        #     cnn_feature = cnn_feature.view(1,-1,256)
-        #     rnn_outputs = rnn(cnn_feature)
-        #     rnn_outputs = rnn_outputs.view(-1,2)
-        #     _,pred = rnn_outputs.max(1)
+        inputs,inputs2 = data[0].to(device),data[1].to(device)
+        cnn_outputs,_ = cnn(inputs)
+        cnn2_outputs,_ = cnn2(inputs2)
 
-
+        max_num1,pred1 = cnn_outputs.max(1)
+        max_num2,pred2 = cnn2_outputs.max(1)
+        pred = np.zeros(len(pred1))
+        for j in range(len(pred1)):
+            if pred1[j] == 0 and pred2[j] == 0:
+                pred[j] = 0
+            elif pred1[j] == 1 and pred2[j] == 1:
+                pred[j] = 1
+            else:
+                if max_num1[j] > max_num2[j]:
+                    pred[j] = pred1[j].cpu().numpy()
+                else:
+                    pred[j] = pred2[j].cpu().numpy()
+        
         with torch.no_grad():
-            res[idx:idx + batch_size] = pred.cpu().numpy()
-
+            res[idx:idx + batch_size] = pred
         idx += batch_size
     
     res = np.squeeze(res)
     
-    res = plus_inhibition(res)
+    # res = plus_inhibition(res)
     if np.sum(np.where(res == 0,1,0)) > len(res) * 0.95:
         end_points = []
         predict_label = 0

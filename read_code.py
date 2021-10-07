@@ -23,7 +23,7 @@ def load_data(sample_path):
 
     return sig, length, fs
 
-def get_signal(path):
+def get_signal(path,channel = 1):
     '''
     Description:
         读取信号并获取采样频率，信号长度，心拍位置，房颤开始位置，房颤结束位置，类别等
@@ -43,7 +43,7 @@ def get_signal(path):
             sig,_,_ = load_data(os.path.join(path,name))
             if sig.shape[1] < sig.shape[0]:
                 sig = np.transpose(sig)
-            sample['sig'] = sig[1,:]
+            sample['sig'] = sig[channel,:]
             ref = RefInfo(os.path.join(path,name))
             sample['fs'] = ref.fs
             sample['len_sig'] = ref.len_sig
@@ -246,7 +246,7 @@ def gen_cnn_X_Y(res,n_samp = 10,n_rate = 1,af_rate = 1):
 
     return res_X,res_Y
 
-def read_pretrain_data(data_path):
+def read_pretrain_data(data_path,n_lead = 1):
     sample = []
     for path in os.listdir(data_path):
         if path == 'WFDB_CPSC2018' or path == 'WFDB_CPSC2018_2' or path == 'WFDB_Ga' or path == 'WFDB_PTBXL' or path == 'WFDB_ChapmanShaoxing':
@@ -258,7 +258,7 @@ def read_pretrain_data(data_path):
                     if label == -1:
                         continue
                     data = loadmat(os.path.join(new_path,data_name))['val']
-                    tmp['data'] = (data[1,:] - baseline)/adc
+                    tmp['data'] = (data[n_lead,:] - baseline)/adc
                     tmp['label'] = label
                     tmp['fs'] = fs
                     sample.append(tmp)           
