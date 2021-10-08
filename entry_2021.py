@@ -55,19 +55,7 @@ def cal_cross_th(X):
     return cross_th
 
 def plus_inhibition(X):
-    patience = 5
-    flag = 0
-    count = 0
-    for i in range(len(X)-1):
-        if X[i] == 0 and X[i+1] == 1:
-            count = 0
-            flag = 1
-        if flag == 1:
-            count += 1
-        if X[i] == 1 and X[i+1] == 0:
-            if count < patience:
-                X[i-count:i] = 0
-            flag = 0
+    patience = 10
     flag = 0
     count = 0
     for i in range(len(X)-1):
@@ -230,7 +218,6 @@ def challenge_entry(sample_path):
     
     res = np.squeeze(res)
     
-    # res = plus_inhibition(res)
     if np.sum(np.where(res == 0,1,0)) > len(res) * 0.95:
         end_points = []
         predict_label = 0
@@ -253,17 +240,34 @@ def challenge_entry(sample_path):
             predict_label = 0
         else:
             tmp = []
+            end_points = []
             tmp.append(0)
             tmp.append(len(sig)-1)
             end_points.append(tmp)
             predict_label = 1
 
+    if end_points != []:
+        res_points = []
+        for (starts,ends) in end_points:
+            if ends - starts > 5 * fs:
+                res_points.append([starts,ends])
+        end_points = res_points
+
+
     # end_points = forward_backward_search(sig,end_points,qrs_pos)
 
     if debug:
         pic_path = r'.\pic'
-        if not os.path.exists(pic_path):
-            os.makedirs(pic_path)
+        norm_path = os.path.join(pic_path,'norm')
+        if not os.path.exists(norm_path):
+            os.makedirs(norm_path)
+        af_path = os.path.join(pic_path,'af')
+        if not os.path.exists(af_path):
+            os.makedirs(af_path)
+        paf_path = os.path.join(pic_path,'paf')
+        if not os.path.exists(paf_path):
+            os.makedirs(paf_path)
+
         ref = RefInfo(sample_path)
         beat_loc = ref.beat_loc
         af_start = ref.af_starts
@@ -282,8 +286,38 @@ def challenge_entry(sample_path):
             plt.legend()
             name = sample_path.split('\\')[-1]
             plt.title(name)
-            plt.savefig(os.path.join(pic_path,name) + '.png')
+            plt.savefig(os.path.join(paf_path,name) + '.png')
             plt.clf()
+        elif class_true == 1:
+            if end_points != []:
+                print(end_points)
+                real_wave = np.ones(sig_len)
+                predict_wave = np.zeros(sig_len)
+                for (starts,ends) in end_points:
+                    predict_wave[starts:ends] = 1
+                plt.plot(real_wave,label = 'real')
+                plt.plot(predict_wave,label = 'predict')
+                plt.legend()
+                name = sample_path.split('\\')[-1]
+                plt.title(name)
+                plt.savefig(os.path.join(af_path,name) + '.png')
+                plt.clf()
+        elif class_true == 0:
+            if end_points != []:
+                print(end_points)
+                real_wave = np.zeros(sig_len)
+                predict_wave = np.zeros(sig_len)
+                for (starts,ends) in end_points:
+                    predict_wave[starts:ends] = 1
+                plt.plot(real_wave,label = 'real')
+                plt.plot(predict_wave,label = 'predict')
+                plt.legend()
+                name = sample_path.split('\\')[-1]
+                plt.title(name)
+                plt.savefig(os.path.join(norm_path,name) + '.png')
+                plt.clf()
+        
+
         file_path = os.path.join(pic_path,'confusion_matrix.npy')
         if os.path.exists(file_path):
             confusion_matrix = np.load(file_path)

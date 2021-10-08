@@ -13,16 +13,16 @@ from Regularization import Regularization
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 data_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
-pretrain_model_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\pretrain_model2.pt'
+pretrain_model_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\pretrain_model.pt'
 batch_size = 512
 epochs = 80
 learning_rate = 0.0001
 patience = 10
 
-res = get_signal(data_path,1)
+res = get_signal(data_path,0)
 train_samp,valid_samp,test_samp = gen_sample(res)
 train_X,train_Y = gen_cnn_X_Y(train_samp,af_rate = 1.5)
-valid_X,valid_Y = gen_cnn_X_Y(valid_samp)
+valid_X,valid_Y = gen_cnn_X_Y(valid_samp,af_rate = 3)
 test_X,test_Y = gen_cnn_X_Y(test_samp)
 
 print('=======================')

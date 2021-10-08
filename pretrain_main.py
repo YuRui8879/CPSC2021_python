@@ -13,7 +13,7 @@ from Regularization import Regularization
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 data_path = r'C:\Users\Public\Database\PhysioNet2021\physionet_database'
-res = read_pretrain_data(data_path)
+res = read_pretrain_data(data_path,1)
 X,Y = gen_pretrain_X_Y(res)
 
 batch_size = 128
