@@ -313,15 +313,17 @@ def gen_pretrain_X_Y(res,seed = 0):
             n_count += 1
         else:
             cursor = 0
+            step = win_len
             while cursor + win_len < len(data):
                 res_X.append(data[cursor:cursor + win_len])
                 res_Y.append(1)
-                cursor += win_len
+                cursor += step
                 af_count += 1
 
     print('af_count:',af_count)
     print('n_count:',n_count)
     return res_X,res_Y
+
 
 def resample(x,ori_fs,dis_fs):
     f = interp1d(np.arange(len(x)),x,kind='cubic')

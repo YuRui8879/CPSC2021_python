@@ -5,14 +5,17 @@ class SEBlock(nn.Module):
 
     def __init__(self,planes):
         super(SEBlock,self).__init__()
-        self.pool = nn.AdaptiveAvgPool1d(1)
+        self.avgpool = nn.AdaptiveAvgPool1d(1)
+        self.maxpool = nn.AdaptiveMaxPool1d(1)
         self.fc1 = nn.Conv1d(planes, planes//8, kernel_size=1)
         self.fc2 = nn.Conv1d(planes//8, planes, kernel_size=1)
         self.relu = nn.ReLU(True)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self,x):
-        tmp = self.pool(x)
+        avgtmp = self.avgpool(x)
+        maxtmp = self.maxpool(x)
+        tmp = avgtmp + maxtmp
         tmp = self.fc1(tmp)
         tmp = self.relu(tmp)
         tmp = self.fc2(tmp)
@@ -124,6 +127,8 @@ class RNN(nn.Module):
         x = self.dropout(x)
         x = self.softmax(self.linear2(x))
         return x
+
+
 
 if __name__ == '__main__':
     model = CNN()

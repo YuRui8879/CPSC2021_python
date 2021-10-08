@@ -166,13 +166,13 @@ def challenge_entry(sample_path):
     debug = 0
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    cnn_path = r'.\model\CNN_best_model.pt'
+    cnn_path = r'.\model\CNN_best_model0.pt'
     cnn = CNN()
     cnn.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
     cnn.eval()
     cnn.to(device)
 
-    cnn_path = r'.\model\CNN_best_model2.pt'
+    cnn_path = r'.\model\CNN_best_model1.pt'
     cnn2 = CNN()
     cnn2.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
     cnn2.eval()
