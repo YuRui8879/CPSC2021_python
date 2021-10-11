@@ -49,7 +49,9 @@ class CNNBlock(nn.Module):
         self.conv1 = nn.Conv1d(in_channel,out_channel,3,padding = 1)
         self.conv2 = nn.Conv1d(out_channel,out_channel,3,padding = 1)
         self.conv3 = nn.Conv1d(out_channel,out_channel,25,2,padding = 12)
-        self.bn = nn.BatchNorm1d(in_channel)
+        self.bn1 = nn.BatchNorm1d(in_channel)
+        self.bn2 = nn.BatchNorm1d(out_channel)
+        self.bn3 = nn.BatchNorm1d(out_channel)
         self.se = SEBlock(out_channel)
         self.cam = CAMBlock()
         self.relu = nn.ReLU(True)
@@ -57,11 +59,13 @@ class CNNBlock(nn.Module):
 
     def forward(self,x):
         shortcut = self.convt(x)
-        x = self.bn(x)
+        x = self.bn1(x)
         x = self.conv1(x)
         x = self.relu(x)
+        x = self.bn2(x)
         x = self.conv2(x)
         x = self.relu(x)
+        x = self.bn3(x)
         x = self.conv3(x)
         x += shortcut
         x = self.relu(x)
@@ -113,7 +117,7 @@ class RNN(nn.Module):
 
     def __init__(self):
         super(RNN,self).__init__()
-        self.gru1 = nn.GRU(256, 128,batch_first=True,bidirectional=True)
+        self.gru1 = nn.GRU(512, 128,batch_first=True,bidirectional=True)
         self.relu = nn.ReLU(False)
         self.dropout = nn.Dropout(0.2)
         self.linear1 = nn.Linear(256,128)
@@ -135,7 +139,7 @@ if __name__ == '__main__':
     x = torch.rand(128,1000)
     y,fea = model(x)
     print(y.size())
-    model = RNN()
-    # x = torch.rand(24,30,256)
+    # model = RNN()
+    # x = torch.rand(24,30,512)
     # y = model(x)
     # print(y.size())

@@ -182,15 +182,24 @@ def gen_rnn_data(res,time_step = 64):
 
 def get_cnn_featrue(X):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model = CNN()
-    model.load_state_dict(torch.load(r'.\model\CNN_best_model.pt',map_location='cuda:0'))
-    model.eval()
-    model.to(device)
+
+    cnn0 = CNN()
+    cnn0.load_state_dict(torch.load(r'.\model\CNN_best_model0.pt',map_location='cuda:0'))
+    cnn0.eval()
+    cnn0.to(device)
+
+    cnn1 = CNN()
+    cnn1.load_state_dict(torch.load(r'.\model\CNN_best_model1.pt',map_location='cuda:0'))
+    cnn1.eval()
+    cnn1.to(device)
+
     res_X = []
     for x in X:
         with torch.no_grad():
             x = torch.FloatTensor(x).to(device)
-            _,y = model(x)
+            _,y0 = cnn0(x)
+            _,y1 = cnn1(x)
+            y = torch.cat((y0,y1),-1)
             res_X.append(y.cpu().numpy())
     return res_X
 

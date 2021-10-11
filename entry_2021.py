@@ -178,6 +178,12 @@ def challenge_entry(sample_path):
     cnn2.eval()
     cnn2.to(device)
 
+    # rnn_path = r'.\model\RNN_best_model.pt'
+    # rnn = RNN()
+    # rnn.load_state_dict(torch.load(rnn_path,map_location='cuda:0'))
+    # rnn.eval()
+    # rnn.to(device)
+
     [b,a] = butter(3,[0.5/100,40/100],'bandpass')
     sig, _, fs = load_data(sample_path)
     qrs_pos = p_t_qrs(sig[:,1],fs)
@@ -195,11 +201,13 @@ def challenge_entry(sample_path):
     idx = 0
     for i,data in enumerate(test_loader,0):
         inputs,inputs2 = data[0].to(device),data[1].to(device)
-        cnn_outputs,_ = cnn(inputs)
-        cnn2_outputs,_ = cnn2(inputs2)
+        cnn_outputs,fea1 = cnn(inputs)
+        cnn2_outputs,fea2 = cnn2(inputs2)
 
         max_num1,pred1 = cnn_outputs.max(1)
         max_num2,pred2 = cnn2_outputs.max(1)
+        
+        # if len(pred1) < batch_size:
         pred = np.zeros(len(pred1))
         for j in range(len(pred1)):
             if pred1[j] == 0 and pred2[j] == 0:
@@ -211,7 +219,14 @@ def challenge_entry(sample_path):
                     pred[j] = pred1[j].cpu().numpy()
                 else:
                     pred[j] = pred2[j].cpu().numpy()
-        
+        # else:
+        #     rnn_fea = torch.cat((fea1,fea2),-1)
+        #     rnn_fea = rnn_fea.view(1,rnn_fea.size(0),rnn_fea.size(1))
+        #     pred = rnn(rnn_fea).squeeze()
+        #     _,pred = pred.max(1)
+        #     with torch.no_grad():
+        #         pred = pred.cpu().numpy()
+
         with torch.no_grad():
             res[idx:idx + batch_size] = pred
         idx += batch_size
