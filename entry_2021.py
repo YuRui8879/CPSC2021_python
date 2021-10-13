@@ -236,7 +236,7 @@ def challenge_entry(sample_path):
     if np.sum(np.where(res == 0,1,0)) > len(res) * 0.95:
         end_points = []
         predict_label = 0
-    elif np.sum(np.where(res == 1,1,0)) > len(res) * 0.85:
+    elif np.sum(np.where(res == 1,1,0)) > len(res) * 0.9:
         tmp = []
         tmp.append(0)
         tmp.append(len(sig)-1)
@@ -244,6 +244,7 @@ def challenge_entry(sample_path):
         predict_label = 1
     else:
         end_points = find_start_end(res,fs,len(sig))
+        # end_points = forward_backward_search(sig,end_points,qrs_pos)
         predict_label = 2
     
     cross_th =  cal_cross_th(res)
@@ -267,9 +268,20 @@ def challenge_entry(sample_path):
             if ends - starts > 5 * fs:
                 res_points.append([starts,ends])
         end_points = res_points
-
-
-    # end_points = forward_backward_search(sig,end_points,qrs_pos)
+        if end_points == []:
+            n_count = np.sum(np.where(res == 0,1,0))
+            af_count = len(res) - n_count
+            if n_count > af_count:
+                end_points = []
+                predict_label = 0
+            else:
+                tmp = []
+                end_points = []
+                tmp.append(0)
+                tmp.append(len(sig)-1)
+                end_points.append(tmp)
+                predict_label = 1
+        
 
     if debug:
         pic_path = r'.\pic'
