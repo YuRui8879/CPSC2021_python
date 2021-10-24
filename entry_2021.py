@@ -168,7 +168,7 @@ def challenge_entry(sample_path):
 
     cnn = []
     for fold in range(folds):
-        cnn_path = r'code\pretrain\model\CNN_best_model0_'+ str(fold) +'.pt'
+        cnn_path = r'.\model\CNN_best_model0_'+ str(fold) +'.pt'
         m = CNN()
         m.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
         m.eval()
@@ -177,7 +177,7 @@ def challenge_entry(sample_path):
 
     cnn2 = []
     for fold in range(folds):
-        cnn_path = r'code\pretrain\model\CNN_best_model1_'+ str(fold) +'.pt'
+        cnn_path = r'.\model\CNN_best_model1_'+ str(fold) +'.pt'
         m = CNN()
         m.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
         m.eval()
