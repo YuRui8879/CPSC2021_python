@@ -10,11 +10,10 @@ from DataAdapter import DataAdapter2
 import torch.utils.data as Data
 from model import CNN,RNN
 import torch
-from read_code import load_data
+from read_code import load_data,norm
 from scipy.signal import butter,filtfilt
 from score_2021 import RefInfo
 import matplotlib.pyplot as plt
-from read_code import norm
 from scipy import interpolate
 from utils import p_t_qrs
 
@@ -165,18 +164,25 @@ def challenge_entry(sample_path):
     """
     debug = 0
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    folds = 5
 
-    cnn_path = r'.\model\CNN_best_model0.pt'
-    cnn = CNN()
-    cnn.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
-    cnn.eval()
-    cnn.to(device)
+    cnn = []
+    for fold in range(folds):
+        cnn_path = r'code\pretrain\model\CNN_best_model0_'+ str(fold) +'.pt'
+        m = CNN()
+        m.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
+        m.eval()
+        m.to(device)
+        cnn.append(m)
 
-    cnn_path = r'.\model\CNN_best_model1.pt'
-    cnn2 = CNN()
-    cnn2.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
-    cnn2.eval()
-    cnn2.to(device)
+    cnn2 = []
+    for fold in range(folds):
+        cnn_path = r'code\pretrain\model\CNN_best_model1_'+ str(fold) +'.pt'
+        m = CNN()
+        m.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
+        m.eval()
+        m.to(device)
+        cnn2.append(m)
 
     # rnn_path = r'.\model\RNN_best_model.pt'
     # rnn = RNN()
@@ -201,34 +207,34 @@ def challenge_entry(sample_path):
     idx = 0
     for i,data in enumerate(test_loader,0):
         inputs,inputs2 = data[0].to(device),data[1].to(device)
-        cnn_outputs,fea1 = cnn(inputs)
-        cnn2_outputs,fea2 = cnn2(inputs2)
+        preds = []
+        for fold in range(folds):
+            cnn_outputs = cnn[fold](inputs)
+            cnn2_outputs = cnn2[fold](inputs2)
 
-        max_num1,pred1 = cnn_outputs.max(1)
-        max_num2,pred2 = cnn2_outputs.max(1)
+            max_num1,pred1 = cnn_outputs.max(1)
+            max_num2,pred2 = cnn2_outputs.max(1)
         
-        # if len(pred1) < batch_size:
-        pred = np.zeros(len(pred1))
-        for j in range(len(pred1)):
-            if pred1[j] == 0 and pred2[j] == 0:
-                pred[j] = 0
-            elif pred1[j] == 1 and pred2[j] == 1:
-                pred[j] = 1
-            else:
-                if max_num1[j] > max_num2[j]:
-                    pred[j] = pred1[j].cpu().numpy()
+        
+            pred = np.zeros(len(pred1))
+            for j in range(len(pred1)):
+                if pred1[j] == 0 and pred2[j] == 0:
+                    pred[j] = 0
+                elif pred1[j] == 1 and pred2[j] == 1:
+                    pred[j] = 1
                 else:
-                    pred[j] = pred2[j].cpu().numpy()
-        # else:
-        #     rnn_fea = torch.cat((fea1,fea2),-1)
-        #     rnn_fea = rnn_fea.view(1,rnn_fea.size(0),rnn_fea.size(1))
-        #     pred = rnn(rnn_fea).squeeze()
-        #     _,pred = pred.max(1)
-        #     with torch.no_grad():
-        #         pred = pred.cpu().numpy()
+                    if max_num1[j] > max_num2[j]:
+                        pred[j] = pred1[j].cpu().numpy()
+                    else:
+                        pred[j] = pred2[j].cpu().numpy()
+
+            preds.append(pred)
+            
+        preds = np.stack(preds)
+        max_pred = np.where(np.sum(preds,0) > folds//2,1,0)
 
         with torch.no_grad():
-            res[idx:idx + batch_size] = pred
+            res[idx:idx + batch_size] = max_pred
         idx += batch_size
     
     res = np.squeeze(res)
@@ -244,7 +250,6 @@ def challenge_entry(sample_path):
         predict_label = 1
     else:
         end_points = find_start_end(res,fs,len(sig))
-        # end_points = forward_backward_search(sig,end_points,qrs_pos)
         predict_label = 2
     
     cross_th =  cal_cross_th(res)
@@ -282,9 +287,8 @@ def challenge_entry(sample_path):
                 end_points.append(tmp)
                 predict_label = 1
         
-
     if debug:
-        pic_path = r'.\pic'
+        pic_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\pic'
         norm_path = os.path.join(pic_path,'norm')
         if not os.path.exists(norm_path):
             os.makedirs(norm_path)

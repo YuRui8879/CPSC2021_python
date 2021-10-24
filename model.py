@@ -109,9 +109,8 @@ class CNN(nn.Module):
         _,h = self.gru(x)
         h = self.relu(h.permute([1,0,2]))
         x = h.reshape(h.size(0),-1)
-        fea = x
         x = self.linear_unit(x)
-        return x,fea
+        return x
 
 class RNN(nn.Module):
 
@@ -137,7 +136,7 @@ class RNN(nn.Module):
 if __name__ == '__main__':
     model = CNN()
     x = torch.rand(128,1000)
-    y,fea = model(x)
+    y = model(x)
     print(y.size())
     # model = RNN()
     # x = torch.rand(24,30,512)

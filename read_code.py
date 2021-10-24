@@ -9,6 +9,7 @@ import torch
 import pandas as pd
 from scipy.io import loadmat
 from scipy.interpolate import interp1d
+from tools.ssqueezepy.synsq_cwt import synsq_cwt_fwd
 
 def norm(x):
     min_ = np.min(x)
@@ -333,6 +334,30 @@ def gen_pretrain_X_Y(res,seed = 0):
     print('n_count:',n_count)
     return res_X,res_Y
 
+def save_wavelet_data(fea,label,save_path):
+    OPTS = {'type': 'morlet',
+        'difftype': 'direct',  # 'phase',
+        'mu': np.pi / 1,
+        # 'gamma': 1.4901e-08
+        # , 'minfrequency': 0.1
+        # ,'freqscale': 'linear'
+        # , 'freqscale': 'log'
+        }
+
+    for i in range(len(fea)):
+        wsst, fs, *_ = synsq_cwt_fwd(fea[i],fs=200, nv=16, opts=OPTS)
+        np.savez(os.path.join(save_path,str(i)),data = np.abs(wsst),label = label[i])
+        print('文件{}保存完成'.format(i))
+    
+def load_wavelet_data(idx,save_path):
+    try:
+        tmp = np.load(os.path.join(save_path,idx))
+        data = tmp['data']
+        label = tmp['label']
+    except:
+        print('文件{}不存在'.format(idx))
+    return data,label
+
 
 def resample(x,ori_fs,dis_fs):
     f = interp1d(np.arange(len(x)),x,kind='cubic')
@@ -347,10 +372,17 @@ def load_pretrained_mdoel(model_path):
     pretrained_dict.pop('linear_unit.0.bias')
     pretrained_dict.pop('linear_unit.3.weight')
     pretrained_dict.pop('linear_unit.3.bias')
+    pretrained_dict.pop('linear_unit.6.weight')
+    pretrained_dict.pop('linear_unit.6.bias')
     model.load_state_dict(pretrained_dict, strict=False)
     return model
     
 
+
 if __name__ == '__main__':
-    model_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\pretrain_model.pt'
-    load_pretrained_mdoel(model_path)
+    data_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
+    res = get_signal(data_path,0)
+    X,Y = gen_cnn_X_Y(res,50,af_rate = 2)
+    print(np.array(X).shape)
+    print('1:',np.sum(np.where(np.array(Y)==1,1,0)))
+    print('0:',np.sum(np.where(np.array(Y)==0,1,0)))

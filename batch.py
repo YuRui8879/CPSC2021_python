@@ -12,7 +12,7 @@ def cal_cnn_batch(train_loader,model,criterion,device,optimizer = None,reg_loss 
     for i,data in enumerate(train_loader,0):
 
         inputs,labels = data[0].to(device),data[1].to(device)
-        outputs,fea = model(inputs)
+        outputs = model(inputs)
         _,pred = outputs.max(1)
 
         loss = criterion(outputs,labels)
