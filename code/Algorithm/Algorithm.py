@@ -23,7 +23,7 @@ class Algorithm():
             pretrain_model_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\pretrain\pretrain_model0.pt' # 加载预训练模型文件的路径
         else:
             pretrain_model_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\pretrain\pretrain_model1.pt'
-        data_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\data\cpsc' # 存放cpsc文件的路径
+        data_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data' # 存放cpsc文件的路径
         self.parallel = parallel
         batch_size = 512 # 批大小
         learning_rate = 0.0001 # 学习率大小
