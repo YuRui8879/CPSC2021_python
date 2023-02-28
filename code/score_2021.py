@@ -165,10 +165,10 @@ def score(data_path, ans_path):
     return score_avg
 
 if __name__ == '__main__':
-    TESTSET_PATH = sys.argv[1]
-    RESULT_PATH = sys.argv[2]
-    # TESTSET_PATH = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
-    # RESULT_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\out'
+    # TESTSET_PATH = sys.argv[1]
+    # RESULT_PATH = sys.argv[2]
+    TESTSET_PATH = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data' # 存放数据路径  
+    RESULT_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\out' # 预测文件路径
     score_avg = score(TESTSET_PATH, RESULT_PATH)
     print('AF Endpoints Detection Performance: %0.4f' %score_avg)
 
@@ -176,3 +176,8 @@ if __name__ == '__main__':
         print('AF Endpoints Detection Performance: %0.4f' %score_avg, file=score_file)
 
         score_file.close()
+
+    import numpy as np
+
+    C = np.load(r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\pic\confusion_matrix.npy') # 保存混淆矩阵的路径
+    print(C)

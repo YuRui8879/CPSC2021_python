@@ -1,8 +1,9 @@
 import numpy as np
 import random
 import torch.utils.data as Data
+import torch
 
-class EnsembleAdapter:
+class EnsembleDataAdapter:
 
     def __init__(self,X,Y,fold,train_rate = 0.8,seed = -1):
         X = np.array(X)
@@ -98,7 +99,7 @@ class DataAdapter(Data.Dataset):
     def __init__(self,X,Y):
         super(DataAdapter,self).__init__()
         self.X = torch.FloatTensor(X)
-        self.Y = torch.FloatTensor(Y)
+        self.Y = torch.LongTensor(Y)
 
     def __getitem__(self, index):
         return self.X[index,:],self.Y[index]

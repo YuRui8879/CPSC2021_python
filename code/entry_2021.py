@@ -6,16 +6,16 @@ import sys
 
 import wfdb
 from utils import qrs_detect, comp_cosEn, save_dict
-from DataAdapter import DataAdapter2
+from DataAdapter.DataAdapter import DataAdapter2
 import torch.utils.data as Data
-from model import CNN,RNN
+from Model.Model import Model
 import torch
-from read_code import load_data,norm
 from scipy.signal import butter,filtfilt
 from score_2021 import RefInfo
 import matplotlib.pyplot as plt
 from scipy import interpolate
 from utils import p_t_qrs
+from scipy.io import savemat
 
 """
 Written by:  Xingyao Wang, Chengyu Liu
@@ -25,6 +25,20 @@ Written by:  Xingyao Wang, Chengyu Liu
 
 Save answers to '.json' files, the format is as {‘predict_endpoints’: [[s0, e0], [s1, e1], …, [sm-1, em-2]]}.
 """
+
+def norm(x):
+    min_ = np.min(x)
+    max_ = np.max(x)
+    x = (x - min_)/(max_ - min_)
+    return x
+
+def load_data(sample_path):
+    sig, fields = wfdb.rdsamp(sample_path)
+    length = len(sig)
+    fs = fields['fs']
+
+    return sig, length, fs
+
 def move_windows(X,fs,win_n = 5):
     step = fs
     windows_length = win_n * fs
@@ -166,23 +180,34 @@ def challenge_entry(sample_path):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     folds = 5
 
-    cnn = []
-    for fold in range(folds):
-        cnn_path = r'.\model\CNN_best_model0_'+ str(fold) +'.pt'
-        m = CNN()
-        m.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
-        m.eval()
-        m.to(device)
-        cnn.append(m)
+    model0 = Model()
+    model0.load_state_dict(torch.load(r'.\model\CNN\CNN_model0.pt',map_location='cuda:0'))
+    model0.eval()
+    model0.to(device)
 
-    cnn2 = []
-    for fold in range(folds):
-        cnn_path = r'.\model\CNN_best_model1_'+ str(fold) +'.pt'
-        m = CNN()
-        m.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
-        m.eval()
-        m.to(device)
-        cnn2.append(m)
+    model1 = Model()
+    model1.load_state_dict(torch.load(r'.\model\CNN\CNN_model1.pt',map_location='cuda:0'))
+    model1.eval()
+    model1.to(device)
+
+
+    # cnn = []
+    # for fold in range(folds):
+    #     cnn_path = r'.\model\CNN_best_model0_'+ str(fold) +'.pt'
+    #     m = Model()
+    #     m.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
+    #     m.eval()
+    #     m.to(device)
+    #     cnn.append(m)
+
+    # cnn2 = []
+    # for fold in range(folds):
+    #     cnn_path = r'.\model\CNN_best_model1_'+ str(fold) +'.pt'
+    #     m = Model()
+    #     m.load_state_dict(torch.load(cnn_path,map_location='cuda:0'))
+    #     m.eval()
+    #     m.to(device)
+    #     cnn2.append(m)
 
     # rnn_path = r'.\model\RNN_best_model.pt'
     # rnn = RNN()
@@ -207,31 +232,50 @@ def challenge_entry(sample_path):
     idx = 0
     for i,data in enumerate(test_loader,0):
         inputs,inputs2 = data[0].to(device),data[1].to(device)
-        preds = []
-        for fold in range(folds):
-            cnn_outputs = cnn[fold](inputs)
-            cnn2_outputs = cnn2[fold](inputs2)
 
-            max_num1,pred1 = cnn_outputs.max(1)
-            max_num2,pred2 = cnn2_outputs.max(1)
-        
-        
-            pred = np.zeros(len(pred1))
-            for j in range(len(pred1)):
-                if pred1[j] == 0 and pred2[j] == 0:
-                    pred[j] = 0
-                elif pred1[j] == 1 and pred2[j] == 1:
-                    pred[j] = 1
+        cnn_outputs = model0(inputs)
+        cnn2_outputs = model1(inputs2)
+
+        max_num1,pred1 = cnn_outputs.max(1)
+        max_num2,pred2 = cnn2_outputs.max(1)
+
+        pred = np.zeros(len(pred1))
+        for j in range(len(pred1)):
+            if pred1[j] == 0 and pred2[j] == 0:
+                pred[j] = 0
+            elif pred1[j] == 1 and pred2[j] == 1:
+                pred[j] = 1
+            else:
+                if max_num1[j] > max_num2[j]:
+                    pred[j] = pred1[j].cpu().numpy()
                 else:
-                    if max_num1[j] > max_num2[j]:
-                        pred[j] = pred1[j].cpu().numpy()
-                    else:
-                        pred[j] = pred2[j].cpu().numpy()
+                    pred[j] = pred2[j].cpu().numpy()
+        max_pred = pred
 
-            preds.append(pred)
+        # for fold in range(folds):
+        #     cnn_outputs = cnn[fold](inputs)
+        #     cnn2_outputs = cnn2[fold](inputs2)
+
+        #     max_num1,pred1 = cnn_outputs.max(1)
+        #     max_num2,pred2 = cnn2_outputs.max(1)
+        
+        
+        #     pred = np.zeros(len(pred1))
+        #     for j in range(len(pred1)):
+        #         if pred1[j] == 0 and pred2[j] == 0:
+        #             pred[j] = 0
+        #         elif pred1[j] == 1 and pred2[j] == 1:
+        #             pred[j] = 1
+        #         else:
+        #             if max_num1[j] > max_num2[j]:
+        #                 pred[j] = pred1[j].cpu().numpy()
+        #             else:
+        #                 pred[j] = pred2[j].cpu().numpy()
+
+        #     preds.append(pred)
             
-        preds = np.stack(preds)
-        max_pred = np.where(np.sum(preds,0) > folds//2,1,0)
+        # preds = np.stack(preds)
+        # max_pred = np.where(np.sum(preds,0) > folds//2,1,0)
 
         with torch.no_grad():
             res[idx:idx + batch_size] = max_pred
@@ -288,7 +332,7 @@ def challenge_entry(sample_path):
                 predict_label = 1
         
     if debug:
-        pic_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\pic'
+        pic_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\pic' # 输出测试图片的路径
         norm_path = os.path.join(pic_path,'norm')
         if not os.path.exists(norm_path):
             os.makedirs(norm_path)
@@ -365,19 +409,20 @@ def challenge_entry(sample_path):
 
 
 if __name__ == '__main__':
-    DATA_PATH = sys.argv[1]
-    RESULT_PATH = sys.argv[2]
-    # DATA_PATH = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data'
-    # RESULT_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\out'
-    # RECORDS_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\test_record'
+    # DATA_PATH = sys.argv[1]
+    # RESULT_PATH = sys.argv[2]
+    DATA_PATH = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data' # 存放cpsc数据的路径
+    RESULT_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\out' # 输出预测文件的路径
+    RECORDS_PATH = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\test_record' # 测试集索引文件路径
     if not os.path.exists(RESULT_PATH):
         os.makedirs(RESULT_PATH)
     
-    test_set = open(os.path.join(DATA_PATH, 'RECORDS'), 'r').read().splitlines()
-    # test_set = open(os.path.join(RECORDS_PATH, 'RECORDS'), 'r').read().splitlines()
+    # test_set = open(os.path.join(DATA_PATH, 'RECORDS'), 'r').read().splitlines()
+    test_set = open(os.path.join(RECORDS_PATH, 'RECORDS'), 'r').read().splitlines()
     for i, sample in enumerate(test_set):
         print(sample)
         sample_path = os.path.join(DATA_PATH, sample)
         pred_dict = challenge_entry(sample_path)
 
         save_dict(os.path.join(RESULT_PATH, sample+'.json'), pred_dict)
+    

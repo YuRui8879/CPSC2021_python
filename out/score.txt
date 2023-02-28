@@ -1,1 +1,0 @@
-AF Endpoints Detection Performance: 1.7373

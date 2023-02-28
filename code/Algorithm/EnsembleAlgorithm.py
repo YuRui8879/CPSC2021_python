@@ -6,32 +6,39 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from Model.Model import Model
-from DataAdapter.EnsembleDataAdapter import DataAdapter,EnsembleDataAdapter
+from DataAdapter.EnsembleAdapter import DataAdapter,EnsembleDataAdapter
 import torch.utils.data as Data
 from torch.optim.lr_scheduler import MultiStepLR
 import time
 import numpy as np
 np.set_printoptions(suppress = True)
 import os
+import wfdb
+from score_2021 import RefInfo
+from scipy.signal import butter,filtfilt
 
 class Algorithm():
 
     def __init__(self,parallel = True):
         super(Algorithm,self).__init__()
-        self.save_path = r'..\..\..\model\CNN'
-        self.pretrain_model_path = r'..\..\model\pretrain\pretrain_model1'
-        data_path = r'..\..\data\cpsc'
+        self.save_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\CNN' # 存放训练好的模型的路径
+        lead = 1
+        if lead == 1:
+            self.pretrain_model_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\pretrain\pretrain_model1.pt' # 预训练模型存放路径
+        else:
+            self.pretrain_model_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\pretrain\pretrain_model0.pt'
+        data_path = r'C:\Users\yurui\Desktop\item\cpsc\data\all_data' # cpsc数据库路径
         self.parallel = parallel
         self.batch_size = 512
-        self.epochs = 80
+        self.epochs = 1
         self.learning_rate = 0.0001
         self.patience = 10
         self.folds = 5
-        lead = 1
 
         res = self._get_signal(data_path,lead)
         X,Y = self._gen_cnn_X_Y(res,50,af_rate = 2)
         self.dataset = EnsembleDataAdapter(X,Y,self.folds,seed = 0)
+        
 
 
     def train(self):
@@ -52,7 +59,7 @@ class Algorithm():
             model.cuda()
             criterion = nn.CrossEntropyLoss()
             optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
-            early_stopping = EarlyStopping(self.patience, verbose=False)
+            early_stopping = EarlyStopping(self.save_path,self.patience, verbose=False)
             # clr = CosineAnnealingLR(optimizer,T_max = 32)
             clr = MultiStepLR(optimizer,[20,50],gamma=0.1)
 
@@ -62,7 +69,7 @@ class Algorithm():
             for epoch in range(1,self.epochs + 1):
                 start_time = time.time()
                 train_res = self._cal_batch(train_loader,model,criterion,optimizer,reg_loss,'train')
-                test_res = self._cal_batch(test_loader,model,criterion,optimizer,reg_loss,'test')
+                test_res = self._cal_batch(valid_loader,model,criterion,optimizer,reg_loss,'test')
                 end_time = time.time()
                 print('- Epoch: %d - Train_loss: %.5f - Train_mean_acc: %.5f - Val_loss: %.5f - Val_mean_acc: %5f - T_Time: %.3f' \
                     %(epoch,train_res['loss'],train_res['acc'],test_res['loss'],test_res['acc'],end_time - start_time))
@@ -75,7 +82,7 @@ class Algorithm():
                     break
 
             print('CNN Training Finished')
-            dataset.step()
+            self.dataset.step()
 
 
     def _cal_batch(self,loader,model,criterion,optimizer,reg_loss,types = 'train'):
@@ -89,9 +96,9 @@ class Algorithm():
         else:
             model.eval()
 
-        for i,data in enumerate(train_loader,0):
+        for i,data in enumerate(loader,0):
 
-            inputs,labels = data[0].to(device),data[1].to(device)
+            inputs,labels = data[0].cuda(),data[1].cuda()
             outputs = model(inputs)
             _,pred = outputs.max(1)
 
@@ -128,7 +135,7 @@ class Algorithm():
         return C,acc
 
     # 计算F1值
-    def _cal_F1(C):
+    def _cal_F1(self,C):
         pre = C[1,1] / (C[0,1] + C[1,1])
         rec = C[1,1] / (C[1,0] + C[1,1])
         if pre + rec == 0:
@@ -139,6 +146,7 @@ class Algorithm():
 
     # 测试函数
     def test(self):
+        criterion = nn.CrossEntropyLoss()
         test_X,test_Y = self.dataset.get_test_set()
         test_set = DataAdapter(test_X, test_Y)
         test_loader = Data.DataLoader(test_set,batch_size = self.batch_size,shuffle = False,num_workers = 0)
@@ -147,8 +155,10 @@ class Algorithm():
             model = nn.DataParallel(model)
         model.load_state_dict(torch.load(os.path.join(self.save_path,'EnsembleCNN_model.pt')))
         model.cuda()
+        optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
+        reg_loss = Regularization(model, 0.001)
         start_time = time.time()
-        res = self._cal_batch(self.test_loader,model,self.criterion,self.optimizer,self.reg_loss,'test')
+        res = self._cal_batch(test_loader,model,criterion,optimizer,reg_loss,'test')
         end_time = time.time()
         print('T_T Time:',end_time - start_time)
         print('Test Loss:',res['loss'])
@@ -186,7 +196,7 @@ class Algorithm():
             if file.endswith('.hea'):
                 name = file.split('.')[0]
                 sample['name'] = name
-                sig,_,_ = load_data(os.path.join(path,name))
+                sig,_,_ = self._load_data(os.path.join(path,name))
                 if sig.shape[1] < sig.shape[0]:
                     sig = np.transpose(sig)
                 sample['sig'] = sig[channel,:]
@@ -201,13 +211,23 @@ class Algorithm():
         print('文件读取完成')
         return res
 
+    def _load_data(self,sample_path):
+        sig, fields = wfdb.rdsamp(sample_path)
+        length = len(sig)
+        fs = fields['fs']
+
+        return sig, length, fs
+
+    def _norm(self,x):
+        return (x - np.mean(x))/np.std(x)
+
     def _gen_cnn_X_Y(self,res,n_samp = 10,n_rate = 1,af_rate = 1):
         res_X = []
         res_Y = []
         [b,a] = butter(3,[0.5/100,40/100],'bandpass')
         for samp in res:
             class_true = int(samp['class_true'])
-            sig = norm(filtfilt(b,a,samp['sig']))
+            sig = self._norm(filtfilt(b,a,samp['sig']))
             fs = samp['fs']
             sig_len = len(sig)
             if sig_len < 2*n_samp*fs:
@@ -216,13 +236,13 @@ class Algorithm():
             if class_true == 0:
                 square_wave = np.zeros(sig_len)
                 nEN = sig_len//int(n_rate * n_samp)
-                tmp_X,tmp_Y = data_enhance(sig,square_wave,5*fs,nEN)
+                tmp_X,tmp_Y = self._data_enhance(sig,square_wave,5*fs,nEN)
                 res_X.extend(tmp_X)
                 res_Y.extend(tmp_Y)
             elif class_true == 1:
                 square_wave = np.ones(sig_len)
                 nEN = sig_len//int(af_rate * n_samp)
-                tmp_X,tmp_Y = data_enhance(sig,square_wave,5*fs,nEN)
+                tmp_X,tmp_Y = self._data_enhance(sig,square_wave,5*fs,nEN)
                 res_X.extend(tmp_X)
                 res_Y.extend(tmp_Y)
             else:
@@ -232,7 +252,7 @@ class Algorithm():
                 square_wave = np.zeros(sig_len)
                 for j in range(len(af_start)):
                     square_wave[int(beat_loc[int(af_start[j])]):int(beat_loc[int(af_end[j])])] = 1
-                tmp_X,tmp_Y = data_enhance(sig,square_wave,5*fs,fs)
+                tmp_X,tmp_Y = self._data_enhance(sig,square_wave,5*fs,fs)
                 AF_index = np.where(np.array(tmp_Y) == 1,True,False)
                 Normal_index = np.where(np.array(tmp_Y) == 0,True,False)
                 AF_X = np.array(tmp_X)[AF_index,:]
@@ -251,6 +271,21 @@ class Algorithm():
                     res_Y.append(N_Y[n])
 
         return res_X,res_Y
+
+    def _data_enhance(self,sig,label,win_len,step):
+        sig_len = len(sig)
+        res_sig = []
+        res_label = []
+        for ii in range(0,sig_len-win_len,step):
+            tmp = label[ii:ii+win_len]
+            if np.sum(tmp) > len(tmp)//2:
+                res_label.append(1)
+                res_sig.append(sig[ii:ii+win_len])
+            else:
+                res_label.append(0)
+                res_sig.append(sig[ii:ii+win_len])
+            
+        return res_sig,res_label
 
 class EarlyStopping:
     def __init__(self, save_path, patience=7, verbose=False, delta=0):

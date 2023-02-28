@@ -8,11 +8,11 @@ CPSC 2021比赛在2021年10月份左右就已经结束了，但是碍于其他�
 
 本人的最终成绩在Official Entries中排名第11，如果加上Unofficial Entries，则排名在第20。可以从图中看到，我们在隐藏数据集Test_II中仅获得了0.9728分，存在严重的过拟合现象
 
-![rank](pic\readme_pic\pic_1.png)
+![rank](https://github.com/YuRui8879/CPSC2021_python/blob/master/pic/readme_pic/pic_1.png)
 
 在比赛过程中，我们一共有12次有效的提交。分数波动如图所示，在1.7到1.8之间
 
-![score](pic\readme_pic\pic_2.png)
+![score](https://github.com/YuRui8879/CPSC2021_python/blob/master/pic/readme_pic/pic_2.png)
 
 **注意**：代码虽然整理完了，但是还没通过测试，这部分工作过段时间再完成
 
@@ -22,7 +22,7 @@ CPSC 2021比赛在2021年10月份左右就已经结束了，但是碍于其他�
 
 受到CPSC 2018第一名的模型的启发，我们建立了一个CNN及RNN的混合模型。CNN部分一共有15个卷积层，使用shortcut连接，并添加CAMB注意力模块。RNN部分使用一个双向的GRU层获取时序关系。模型如下图所示
 
-![model](pic\readme_pic\pic_3.png)
+![model](https://github.com/YuRui8879/CPSC2021_python/blob/master/pic/readme_pic/pic_3.png)
 
 ### 训练方法
 

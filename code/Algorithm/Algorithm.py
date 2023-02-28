@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from Model.Model import Model
-from DataAdapter.DataAdapter import DataAdapter
+from DataAdapter.DataAdapter import BaseAdapter,TrainAdapter,ValidAdapter,TestAdapter
 import torch.utils.data as Data
 from torch.optim.lr_scheduler import MultiStepLR
 import time
@@ -16,25 +16,29 @@ import os
 
 class Algorithm():
 
-    def __init__(self,parallel = True):
+    def __init__(self,lead,parallel = True):
         super(Algorithm,self).__init__()
-        self.save_path = r'..\..\..\model\CNN'
-        pretrain_model_path = r'..\..\model\pretrain\pretrain_model1'
-        data_path = r'..\..\data\cpsc'
+        self.save_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\CNN' # 保存训练好的模型文件的路径
+        if lead == 0:
+            pretrain_model_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\pretrain\pretrain_model0.pt' # 加载预训练模型文件的路径
+        else:
+            pretrain_model_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\model\pretrain\pretrain_model1.pt'
+        data_path = r'C:\Users\yurui\Desktop\item\cpsc\code\pretrain\data\cpsc' # 存放cpsc文件的路径
         self.parallel = parallel
         batch_size = 512 # 批大小
-        learning_rate = 0.001 # 学习率大小
+        learning_rate = 0.0001 # 学习率大小
         patience = 10 # 提前停止参数
         self.epochs = 80
         
-        train_adapter = DataAdapter(data_path,mode = 0) # 训练集的数据生成器
-        valid_adapter = DataAdapter(data_path,mode = 1)
-        test_adapter = DataAdapter(data_path,mode = 2)
+        base_adapter = BaseAdapter(data_path,lead) # 训练集的数据生成器
+        train_adapter = TrainAdapter(base_adapter)
+        valid_adapter = ValidAdapter(base_adapter)
+        test_adapter = TestAdapter(base_adapter)
         self.train_loader = Data.DataLoader(train_adapter,batch_size=batch_size,shuffle=True,num_workers=0)
         self.valid_loader = Data.DataLoader(valid_adapter,batch_size=batch_size,shuffle=False,num_workers=0)
         self.test_loader = Data.DataLoader(test_adapter,batch_size=batch_size,shuffle=False,num_workers=0)
         
-        self.model = load_pretrained_mdoel(pretrain_model_path)
+        self.model = self._load_pretrained_mdoel(pretrain_model_path)
         if parallel:
             self.model = nn.DataParallel(self.model)
         self.model.cuda()
@@ -49,7 +53,7 @@ class Algorithm():
         for epoch in range(1,self.epochs + 1):
             start_time = time.time()
             train_res = self._cal_batch(self.train_loader,self.model,self.criterion,self.optimizer,self.reg_loss,'train')
-            test_res = self._cal_batch(self.test_loader,self.model,self.criterion,self.optimizer,self.reg_loss,'test')
+            test_res = self._cal_batch(self.valid_loader,self.model,self.criterion,self.optimizer,self.reg_loss,'test')
             end_time = time.time()
             print('- Epoch: %d - Train_loss: %.5f - Train_mean_acc: %.5f - Val_loss: %.5f - Val_mean_acc: %5f - T_Time: %.3f' \
                 %(epoch,train_res['loss'],train_res['acc'],test_res['loss'],test_res['acc'],end_time - start_time))
@@ -73,9 +77,9 @@ class Algorithm():
         else:
             model.eval()
 
-        for i,data in enumerate(train_loader,0):
+        for i,data in enumerate(loader,0):
 
-            inputs,labels = data[0].to(device),data[1].to(device)
+            inputs,labels = data[0].cuda(),data[1].cuda()
             outputs = model(inputs)
             _,pred = outputs.max(1)
 
@@ -112,7 +116,7 @@ class Algorithm():
         return C,acc
 
     # 计算F1值
-    def _cal_F1(C):
+    def _cal_F1(self,C):
         pre = C[1,1] / (C[0,1] + C[1,1])
         rec = C[1,1] / (C[1,0] + C[1,1])
         if pre + rec == 0:
