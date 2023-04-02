@@ -87,48 +87,60 @@ class BaseAdapter:
         return (x - np.mean(x))/np.std(x)
 
     def _gen_cnn_X_Y(self,res,n_samp = 10,n_rate = 1,af_rate = 1):
+        '''
+        Description:
+            生成模型训练所需要的数据，将数据切割为5s一段的ECG片段
+        Params:
+            res: _get_signal返回的字典，包含了样本的信息
+            n_samp: 从每段数据中采样的ECG片段数量
+            n_rate: 正常ECG片段的比率
+            af_rate: 房颤ECG片段的比率
+        Return:
+            res_X: 模型训练所需的数据
+            res_Y: 模型训练所需的标签
+        '''
         res_X = []
         res_Y = []
-        [b,a] = butter(3,[0.5/100,40/100],'bandpass')
+        [b,a] = butter(3,[0.5/100,40/100],'bandpass') # 巴特沃斯带通滤波器，通频带是0.5-40Hz，阶数是3阶
         for samp in res:
-            class_true = int(samp['class_true'])
-            sig = self._norm(filtfilt(b,a,samp['sig']))
+            class_true = int(samp['class_true']) # 获取当前受试者的分类标签
+            sig = self._norm(filtfilt(b,a,samp['sig'])) # 对信号滤波后标准化
             fs = samp['fs']
             sig_len = len(sig)
             if sig_len < 2*n_samp*fs:
-                continue
+                continue # 如果信号长度太短，该受试者的数据舍去
             
-            if class_true == 0:
-                square_wave = np.zeros(sig_len)
-                nEN = sig_len//int(n_rate * n_samp)
+            if class_true == 0: # 正常受试者
+                square_wave = np.zeros(sig_len) # 因为最终的标签是正常，所以整段数据都认为是正常的
+                nEN = sig_len//int(n_rate * n_samp) # 确定切割的步长，默认是采样10个ECG片段
+                tmp_X,tmp_Y = self._data_enhance(sig,square_wave,5*fs,nEN) # 切割数据，理论上最终会返回10个ECG片段
+                res_X.extend(tmp_X)
+                res_Y.extend(tmp_Y)
+            elif class_true == 1: # 持续性房颤受试者
+                square_wave = np.ones(sig_len) # 因为最终的标签是持续性房颤，所以整段数据都认为是房颤的
+                nEN = sig_len//int(af_rate * n_samp) # 确定切割的步长，默认是采样10个ECG片段
                 tmp_X,tmp_Y = self._data_enhance(sig,square_wave,5*fs,nEN)
                 res_X.extend(tmp_X)
                 res_Y.extend(tmp_Y)
-            elif class_true == 1:
-                square_wave = np.ones(sig_len)
-                nEN = sig_len//int(af_rate * n_samp)
-                tmp_X,tmp_Y = self._data_enhance(sig,square_wave,5*fs,nEN)
-                res_X.extend(tmp_X)
-                res_Y.extend(tmp_Y)
-            else:
-                af_start = samp['af_starts']
-                af_end = samp['af_ends']
-                beat_loc = samp['beat_loc']
-                square_wave = np.zeros(sig_len)
+            else: # 阵发性房颤受试者
+                af_start = samp['af_starts'] # 阵发性房颤的起始点，是一个QRS波的索引
+                af_end = samp['af_ends'] # 阵发性房颤的结束点，是一个QRS波的索引
+                beat_loc = samp['beat_loc'] # QRS波的位置
+                square_wave = np.zeros(sig_len) # 先生成一个全是0的array，就是都是正常的
                 for j in range(len(af_start)):
-                    square_wave[int(beat_loc[int(af_start[j])]):int(beat_loc[int(af_end[j])])] = 1
-                tmp_X,tmp_Y = self._data_enhance(sig,square_wave,5*fs,fs)
-                AF_index = np.where(np.array(tmp_Y) == 1,True,False)
+                    square_wave[int(beat_loc[int(af_start[j])]):int(beat_loc[int(af_end[j])])] = 1 # 然后在阵发性房颤的位置上标注1，认为该段是房颤
+                tmp_X,tmp_Y = self._data_enhance(sig,square_wave,5*fs,fs) # 滑动窗口是5s，重叠4s的方式去采样
+                AF_index = np.where(np.array(tmp_Y) == 1,True,False) # 找到返回的房颤ECG片段的索引
                 Normal_index = np.where(np.array(tmp_Y) == 0,True,False)
-                AF_X = np.array(tmp_X)[AF_index,:]
+                AF_X = np.array(tmp_X)[AF_index,:] # 从tmp_X中提取出相应的数据
                 AF_Y = np.array(tmp_Y)[AF_index]
-                N_X = np.array(tmp_X)[Normal_index,:]
+                N_X = np.array(tmp_X)[Normal_index,:] # 正常的ECG片段使用相同的放法提取
                 N_Y = np.array(tmp_Y)[Normal_index]
-                nAF = len(AF_Y)//n_samp
+                nAF = len(AF_Y)//n_samp # 这一步是为了得到n_samp个AF和N的ECG片段，从得到的AF_X, AF_Y, N_X, N_Y二次采样
                 nN = len(N_Y)//n_samp
                 if nAF == 0 or nN ==0:
                     continue
-                for n in range(0,len(AF_Y),nAF):
+                for n in range(0,len(AF_Y),nAF): # 根据步长从AF_X和AF_Y得到所需的数据
                     res_X.append(AF_X[n,:])
                     res_Y.append(AF_Y[n])
                 for n in range(0,len(N_Y),nN):
@@ -157,13 +169,25 @@ class BaseAdapter:
         return sig, length, fs
 
     def _data_enhance(self,sig,label,win_len,step):
+        '''
+        Description:
+            从受试者的ECG数据中采样，切割成所需的信号长度
+        Params:
+            sig: 受试者的整段ECG信号
+            label: 生成的与sig长度相同的标签
+            win_len: 窗口长度，这里切割成了5s的数据
+            step: 切割的步长
+        Return:
+            res_X: 切割好的数据
+            res_Y: 对应的标签
+        '''
         sig_len = len(sig)
         res_sig = []
         res_label = []
         for ii in range(0,sig_len-win_len,step):
-            tmp = label[ii:ii+win_len]
-            if np.sum(tmp) > len(tmp)//2:
-                res_label.append(1)
+            tmp = label[ii:ii+win_len] # label是一个长度与sig相同的array，生成方式看_gen_cnn_X_Y
+            if np.sum(tmp) > len(tmp)//2: # 如果tmp中有超过一半是房颤
+                res_label.append(1) # 那么这个ECG片段的标签就是房颤，否则就是正常
                 res_sig.append(sig[ii:ii+win_len])
             else:
                 res_label.append(0)
